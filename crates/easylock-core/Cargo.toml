@@ -1,0 +1,33 @@
+[package]
+name = "easylock-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Zero-dependency cryptographic primitives, constant-time math, and C-ABI FFI for easylock"
+
+[lib]
+name = "easylock_core"
+# rlib for Rust consumers; cdylib + staticlib for Tauri / .NET / C / Python FFI.
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[features]
+default = ["std"]
+std = []
+# Opt out of runtime CPU feature detection (forces portable software backends).
+force-portable = []
+
+[dependencies]
+# Intentionally empty: easylock-core has no runtime dependencies.
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "primitives"
+harness = false

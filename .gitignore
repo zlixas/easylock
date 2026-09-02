@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+Cargo.lock.orig
+.DS_Store
+*.profraw
+/crates/easylock-core/include/easylock_generated.h
