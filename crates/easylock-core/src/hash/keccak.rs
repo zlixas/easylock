@@ -47,7 +47,7 @@ const PILN: [usize; 24] = [
     10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
 ];
 
-fn keccak_f(st: &mut [u64; 25]) {
+pub(super) fn keccak_f(st: &mut [u64; 25]) {
     for round in RC.iter().take(ROUNDS) {
         // Theta
         let mut bc = [0u64; 5];
