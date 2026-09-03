@@ -1,8 +1,10 @@
-//! Key-derivation functions: PBKDF2 (RFC 8018) and HKDF (RFC 5869), both
-//! instantiated over HMAC with any [`Hash`](crate::hash::Hash) in this crate.
+//! Key-derivation / password-hashing functions:
 //!
-//! Argon2id is scheduled for a later milestone.
+//! * [`pbkdf2`] (RFC 8018) and [`Hkdf`] (RFC 5869) over HMAC + any
+//!   [`Hash`](crate::hash::Hash) in this crate,
+//! * [`argon2`] (RFC 9106) — memory-hard, the recommended choice for passwords.
 
+pub mod argon2;
 pub mod hkdf;
 pub mod pbkdf2;
 
