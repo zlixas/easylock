@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>easylock</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🔒</span>
+        <div>
+          <div class="brand-name">easylock</div>
+          <div class="brand-sub" id="build-info">—</div>
+        </div>
+      </div>
+      <div class="lang-switch" role="group" aria-label="language">
+        <button data-lang="en" class="lang-btn active">EN</button>
+        <button data-lang="tr" class="lang-btn">TR</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="files" data-i18n="tab.files">Files</button>
+      <button class="tab" data-tab="hash" data-i18n="tab.hash">Hash</button>
+      <button class="tab" data-tab="convert" data-i18n="tab.convert">Convert</button>
+      <button class="tab" data-tab="keys" data-i18n="tab.keys">Keys</button>
+    </nav>
+
+    <main>
+      <!-- FILES -->
+      <section class="panel active" id="panel-files">
+        <h2 data-i18n="files.title">Encrypt / decrypt a file</h2>
+        <p class="hint" data-i18n="files.hint">
+          Drag a file onto the box, or browse. The key is derived from your
+          password with Argon2id; salt and nonces are generated automatically.
+        </p>
+        <div class="dropzone" id="dropzone">
+          <span data-i18n="files.drop">Drop a file here</span>
+          <button class="ghost" id="browse-file" data-i18n="files.browse">Browse…</button>
+          <div class="filename" id="file-name"></div>
+        </div>
+        <div class="row">
+          <label data-i18n="files.cipher">Cipher</label>
+          <select id="file-cipher">
+            <option value="aes-256-gcm">AES-256-GCM</option>
+            <option value="chacha20-poly1305">ChaCha20-Poly1305</option>
+          </select>
+        </div>
+        <div class="row">
+          <label data-i18n="files.password">Password</label>
+          <input type="password" id="file-password" autocomplete="off" />
+        </div>
+        <div class="actions">
+          <button id="do-encrypt" data-i18n="files.encrypt">Encrypt</button>
+          <button class="secondary" id="do-decrypt" data-i18n="files.decrypt">Decrypt</button>
+        </div>
+        <div class="progress" id="file-progress" hidden>
+          <div class="bar"><div class="bar-fill" id="file-bar"></div></div>
+          <div class="progress-label" id="file-progress-label"></div>
+        </div>
+        <div class="result" id="file-result" hidden></div>
+      </section>
+
+      <!-- HASH -->
+      <section class="panel" id="panel-hash">
+        <h2 data-i18n="hash.title">Hash &amp; checksum</h2>
+        <div class="row">
+          <label data-i18n="hash.algo">Algorithm</label>
+          <select id="hash-algo">
+            <option value="sha256">SHA-256</option>
+            <option value="blake3">BLAKE3</option>
+            <option value="keccak256">Keccak-256</option>
+            <option value="sha512">SHA-512</option>
+            <option value="sha3-256">SHA3-256</option>
+          </select>
+        </div>
+        <label class="block" data-i18n="hash.text">Text</label>
+        <textarea id="hash-text" rows="4" placeholder="type or paste…"></textarea>
+        <div class="dropzone small" id="hash-dropzone">
+          <span data-i18n="hash.dropfile">…or drop a file to checksum</span>
+          <div class="filename" id="hash-file-name"></div>
+        </div>
+        <div class="actions">
+          <button id="do-hash" data-i18n="hash.compute">Compute</button>
+        </div>
+        <label class="block" data-i18n="hash.digest">Digest (hex)</label>
+        <output class="mono digest" id="hash-out"></output>
+        <label class="block" data-i18n="hash.compare">Compare with</label>
+        <input type="text" class="mono" id="hash-compare" placeholder="paste a checksum to compare" />
+        <div class="compare-badge" id="compare-badge" hidden></div>
+      </section>
+
+      <!-- CONVERT -->
+      <section class="panel" id="panel-convert">
+        <h2 data-i18n="convert.title">Text &amp; pipeline converter</h2>
+        <p class="hint" data-i18n="convert.hint">
+          Chain transforms left → right. Decoding reverses the same chain.
+        </p>
+        <div class="pipeline" id="pipeline"></div>
+        <div class="actions tight">
+          <button class="ghost" data-add="hex">+ Hex</button>
+          <button class="ghost" data-add="base64">+ Base64</button>
+          <button class="ghost" data-add="base64url">+ Base64URL</button>
+          <button class="ghost" data-add="base58">+ Base58</button>
+          <button class="ghost" data-add="rot13">+ ROT13</button>
+          <button class="ghost danger" id="pipeline-clear" data-i18n="convert.clear">Clear</button>
+        </div>
+        <label class="block" data-i18n="convert.input">Input</label>
+        <textarea id="convert-in" rows="4"></textarea>
+        <div class="actions">
+          <button id="do-encode" data-i18n="convert.encode">Encode →</button>
+          <button class="secondary" id="do-decode" data-i18n="convert.decode">← Decode</button>
+        </div>
+        <label class="block" data-i18n="convert.output">Output</label>
+        <output class="mono block-out" id="convert-out"></output>
+      </section>
+
+      <!-- KEYS -->
+      <section class="panel" id="panel-keys">
+        <h2 data-i18n="keys.title">Password &amp; key generator</h2>
+
+        <div class="card">
+          <h3 data-i18n="keys.pw">Secure password</h3>
+          <div class="row">
+            <label data-i18n="keys.length">Length</label>
+            <input type="number" id="pw-length" min="4" max="128" value="20" />
+          </div>
+          <div class="checks">
+            <label><input type="checkbox" id="pw-lower" checked /> a–z</label>
+            <label><input type="checkbox" id="pw-upper" checked /> A–Z</label>
+            <label><input type="checkbox" id="pw-digit" checked /> 0–9</label>
+            <label><input type="checkbox" id="pw-symbol" /> !@#$</label>
+          </div>
+          <div class="actions"><button id="do-genpw" data-i18n="keys.generate">Generate</button></div>
+          <output class="mono digest" id="pw-out"></output>
+        </div>
+
+        <div class="card">
+          <h3 data-i18n="keys.argon">Argon2id password hash</h3>
+          <div class="row">
+            <label data-i18n="keys.password">Password</label>
+            <input type="password" id="argon-pw" autocomplete="off" />
+          </div>
+          <div class="row triple">
+            <span><label>m (KiB)</label><input type="number" id="argon-m" value="65536" /></span>
+            <span><label>t</label><input type="number" id="argon-t" value="3" /></span>
+            <span><label>p</label><input type="number" id="argon-p" value="4" /></span>
+          </div>
+          <div class="actions"><button id="do-argon" data-i18n="keys.hash">Hash</button></div>
+          <output class="mono block-out" id="argon-out"></output>
+        </div>
+
+        <div class="card">
+          <h3 data-i18n="keys.keypair">Key pair</h3>
+          <div class="row">
+            <label data-i18n="keys.kind">Type</label>
+            <select id="kp-kind">
+              <option value="ed25519">Ed25519 (signing)</option>
+              <option value="x25519">X25519 (ECDH)</option>
+              <option value="mlkem768">ML-KEM-768 (post-quantum)</option>
+              <option value="rsa2048">RSA-2048</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button id="do-keypair" data-i18n="keys.generate">Generate</button>
+            <span class="spinner" id="kp-spin" hidden></span>
+          </div>
+          <label class="block" data-i18n="keys.public">Public</label>
+          <output class="mono block-out" id="kp-public"></output>
+          <label class="block" data-i18n="keys.secret">Secret</label>
+          <output class="mono block-out secret" id="kp-secret"></output>
+          <div class="hint" id="kp-note"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar" id="statusbar" data-i18n="status.ready">Ready</footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
