@@ -1,14 +1,17 @@
-//! RSA (PKCS#1 v1.5) for 2048- and 4096-bit keys.
+//! RSA for 2048- and 4096-bit keys: PKCS#1 v1.5 sign/verify and encrypt/decrypt
+//! (this module), and RSAES-OAEP / PKCS#1 v2.2 in [`oaep`].
 //!
 //! Keys are loaded from raw big-endian components (this build does not parse
 //! DER/PEM — that belongs in a higher layer). Private-key operations use the CRT
 //! with a constant-time Montgomery ladder per prime. Padding checks in
 //! `decrypt`/`verify` are written to avoid revealing *where* a check failed
-//! (Bleichenbacher / padding-oracle hygiene), though RSA-v1.5 decryption should
-//! be avoided in new designs.
+//! (Bleichenbacher / Manger hygiene), though a from-scratch RSA should not be a
+//! padding oracle in the first place.
 //!
 //! `N` is the modulus size in 64-bit limbs: 32 for RSA-2048, 64 for RSA-4096.
 //! `H` is `N / 2` (prime size).
+
+pub mod oaep;
 
 use crate::bigint::montgomery::{reduce_wide, Montgomery};
 use crate::bigint::BigUint;
@@ -75,7 +78,11 @@ impl<const N: usize> RsaPublicKey<N> {
         self.modulus_bytes
     }
 
-    fn raw(&self, m: &BigUint<N>) -> BigUint<N> {
+    pub(super) fn modulus(&self) -> &BigUint<N> {
+        &self.n
+    }
+
+    pub(super) fn raw(&self, m: &BigUint<N>) -> BigUint<N> {
         let e = BigUint::<N>::from_limbs({
             let mut l = [0u64; N];
             l[0] = self.e;
@@ -189,7 +196,7 @@ impl<const N: usize, const H: usize> RsaPrivateKey<N, H> {
     }
 
     /// CRT private-key primitive: `c -> c^d mod n`.
-    fn raw(&self, c: &BigUint<N>) -> BigUint<N> {
+    pub(super) fn raw(&self, c: &BigUint<N>) -> BigUint<N> {
         // m1 = (c mod p)^dp mod p ; m2 = (c mod q)^dq mod q
         let cp = reduce_wide::<H>(&c.limbs, &self.p);
         let cq = reduce_wide::<H>(&c.limbs, &self.q);
@@ -280,14 +287,14 @@ fn ct_choice(v: u64) -> Choice {
     Choice::from_u8((v & 1) as u8)
 }
 
-fn modulus_byte_len<const N: usize>(n: &BigUint<N>) -> usize {
+pub(super) fn modulus_byte_len<const N: usize>(n: &BigUint<N>) -> usize {
     // Highest non-zero byte position + 1.
     let be = n.to_be_bytes();
     let lead = be.iter().take_while(|&&b| b == 0).count();
     be.len() - lead
 }
 
-fn to_fixed_be<const N: usize>(v: &BigUint<N>, len: usize) -> Vec<u8> {
+pub(super) fn to_fixed_be<const N: usize>(v: &BigUint<N>, len: usize) -> Vec<u8> {
     let full = v.to_be_bytes();
     debug_assert!(full.len() >= len);
     full[full.len() - len..].to_vec()

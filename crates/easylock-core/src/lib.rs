@@ -47,6 +47,7 @@ pub mod ec;
 pub mod hash;
 pub mod kdf;
 pub mod mac;
+pub mod pqc;
 pub mod rsa;
 
 #[cfg(feature = "std")]

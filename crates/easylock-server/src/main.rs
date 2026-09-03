@@ -132,7 +132,6 @@ struct HashResp {
 
 async fn hash(Json(req): Json<HashReq>) -> ApiResult<Json<HashResp>> {
     let alg = Algorithm::parse(&req.algo)
-        .filter(|a| !matches!(a, Algorithm::Blake3))
         .ok_or_else(|| bad(format!("unknown algorithm `{}`", req.algo)))?;
     let data = if req.hex {
         de_hex(&req.data, "data")?

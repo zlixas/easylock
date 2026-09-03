@@ -12,6 +12,9 @@ use core::arch::x86_64::{
 /// # Safety
 /// The CPU must support the `aes` target feature. Callers ensure this via
 /// [`crate::cpu::features`] before dispatching here.
+// `loadu`/`storeu` are the explicitly-unaligned SSE2 load/store intrinsics, so
+// the "more-strictly-aligned pointer" cast lint is a false positive here.
+#[allow(clippy::cast_ptr_alignment)]
 #[target_feature(enable = "aes")]
 pub unsafe fn encrypt_block(round_keys: &[[u8; 16]; 15], block: &mut [u8; 16]) {
     // SAFETY: pointers are 16-byte buffers; `loadu`/`storeu` are unaligned.

@@ -8,7 +8,7 @@ use easylock_core::hash::Algorithm;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct Args {
-    /// Hash algorithm: sha256, sha512, keccak256, sha3-256.
+    /// Hash algorithm: sha256, sha512, keccak256, sha3-256, blake3.
     #[arg(short, long, default_value = "sha256")]
     pub algo: String,
 
@@ -22,7 +22,6 @@ pub struct Args {
 
 pub fn run(args: &Args, lang: Lang) -> Result<(), CliError> {
     let alg = Algorithm::parse(&args.algo)
-        .filter(|a| !matches!(a, Algorithm::Blake3))
         .ok_or_else(|| CliError::new(Msg::UnknownAlgorithm(args.algo.clone())))?;
 
     let data = read_input(&args.files.input)?;

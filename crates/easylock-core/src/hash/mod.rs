@@ -6,12 +6,18 @@
 
 use alloc::vec::Vec;
 
+pub mod blake2b;
+pub mod blake3;
 pub mod keccak;
 pub mod sha256;
+pub mod sha3;
 pub mod sha512;
 
+pub use blake2b::Blake2b;
+pub use blake3::Blake3;
 pub use keccak::{Keccak256, Sha3_256};
 pub use sha256::Sha256;
+pub use sha3::{shake128, shake256, Shake128, Shake256};
 pub use sha512::Sha512;
 
 /// A streaming fixed-output hash function.
@@ -108,16 +114,9 @@ impl Algorithm {
             Algorithm::Sha512 => digest::<Sha512>(data),
             Algorithm::Keccak256 => digest::<Keccak256>(data),
             Algorithm::Sha3_256 => digest::<Sha3_256>(data),
-            Algorithm::Blake3 => crate::hash::blake3_unavailable(data),
+            Algorithm::Blake3 => digest::<Blake3>(data),
         }
     }
-}
-
-#[cold]
-fn blake3_unavailable(_data: &[u8]) -> Vec<u8> {
-    // BLAKE3 is scheduled for a later milestone; fail loudly rather than
-    // silently substituting a different function.
-    panic!("BLAKE3 is not yet implemented in this build");
 }
 
 #[cfg(test)]
