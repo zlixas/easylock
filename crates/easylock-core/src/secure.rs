@@ -100,6 +100,18 @@ impl<const N: usize> Zeroize for [i64; N] {
     }
 }
 
+impl Zeroize for [u16] {
+    fn zeroize(&mut self) {
+        zeroize_words(self, 0);
+    }
+}
+
+impl<const N: usize> Zeroize for [u16; N] {
+    fn zeroize(&mut self) {
+        zeroize_words(self, 0);
+    }
+}
+
 impl Zeroize for u32 {
     fn zeroize(&mut self) {
         // SAFETY: `self` is a valid, uniquely-borrowed `u32`.

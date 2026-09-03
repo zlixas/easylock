@@ -174,8 +174,8 @@ pub fn localized_command(base: Command, lang: Lang) -> Command {
             .mut_arg("algo", |a| {
                 a.help(t(
                     lang,
-                    "Hash algorithm: sha256, sha512, keccak256, sha3-256",
-                    "Özet algoritması: sha256, sha512, keccak256, sha3-256",
+                    "Hash algorithm: sha256, sha512, keccak256, sha3-256, blake3",
+                    "Özet algoritması: sha256, sha512, keccak256, sha3-256, blake3",
                 ))
             })
             .mut_arg("encoding", |a| {

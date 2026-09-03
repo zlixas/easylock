@@ -91,9 +91,6 @@ pub unsafe extern "C" fn el_hash(
         let Some(alg) = Algorithm::parse(name) else {
             return ElStatus::BadArgument as i32;
         };
-        if matches!(alg, Algorithm::Blake3) {
-            return ElStatus::BadArgument as i32;
-        }
         // SAFETY: caller contract on `input`.
         let data = unsafe { slice_or_empty(input, input_len) };
         let digest = alg.hash(data);
