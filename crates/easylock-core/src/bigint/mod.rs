@@ -168,6 +168,66 @@ impl<const N: usize> BigUint<N> {
         );
     }
 
+    /// Number of trailing zero bits (`self.trailing_zeros()`), or `64 * N` if
+    /// `self` is zero.
+    #[must_use]
+    pub fn trailing_zeros(&self) -> usize {
+        for (i, &limb) in self.limbs.iter().enumerate() {
+            if limb != 0 {
+                return i * 64 + limb.trailing_zeros() as usize;
+            }
+        }
+        64 * N
+    }
+
+    /// Shift right by `bits` (logical), in place.
+    pub fn shr_bits(&mut self, bits: usize) {
+        if bits == 0 {
+            return;
+        }
+        let limb_shift = bits / 64;
+        let bit_shift = bits % 64;
+        let mut out = [0u64; N];
+        for i in 0..N {
+            let src = i + limb_shift;
+            if src >= N {
+                break;
+            }
+            let mut v = self.limbs[src] >> bit_shift;
+            if bit_shift != 0 && src + 1 < N {
+                v |= self.limbs[src + 1] << (64 - bit_shift);
+            }
+            out[i] = v;
+        }
+        self.limbs = out;
+    }
+
+    /// `self mod m` for a small modulus (non-constant-time; used off the hot path).
+    #[must_use]
+    pub fn rem_u64(&self, m: u64) -> u64 {
+        debug_assert!(m > 0);
+        let mut r: u128 = 0;
+        for &limb in self.limbs.iter().rev() {
+            r = ((r << 64) | u128::from(limb)) % u128::from(m);
+        }
+        r as u64
+    }
+
+    /// Long division by a small divisor: returns `(quotient, remainder)`.
+    /// Non-constant-time; used only in RSA key generation.
+    #[must_use]
+    pub fn div_rem_u64(&self, d: u64) -> (Self, u64) {
+        debug_assert!(d > 0);
+        let mut q = [0u64; N];
+        let mut r: u128 = 0;
+        for i in (0..N).rev() {
+            let acc = (r << 64) | u128::from(self.limbs[i]);
+            q[i] = (acc / u128::from(d)) as u64;
+            r = acc % u128::from(d);
+        }
+        (Self { limbs: q }, r as u64)
+    }
+
     /// Widening multiply: returns `2N` limbs (schoolbook).
     #[must_use]
     pub fn mul_wide(&self, other: &Self) -> Vec<u64> {

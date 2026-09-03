@@ -11,6 +11,7 @@
 //! `N` is the modulus size in 64-bit limbs: 32 for RSA-2048, 64 for RSA-4096.
 //! `H` is `N / 2` (prime size).
 
+pub mod keygen;
 pub mod oaep;
 
 use crate::bigint::montgomery::{reduce_wide, Montgomery};
@@ -48,6 +49,18 @@ pub struct RsaPrivateKey<const N: usize, const H: usize> {
     mont_q: Montgomery<H>,
 }
 
+/// Raw RSA key material, big-endian, from [`RsaPrivateKey::export_components`].
+#[derive(Debug, Clone)]
+pub struct RsaComponents {
+    pub n: Vec<u8>,
+    pub e: u64,
+    pub p: Vec<u8>,
+    pub q: Vec<u8>,
+    pub dp: Vec<u8>,
+    pub dq: Vec<u8>,
+    pub qinv: Vec<u8>,
+}
+
 impl<const N: usize> RsaPublicKey<N> {
     /// Load from a big-endian modulus and a small public exponent.
     ///
@@ -80,6 +93,18 @@ impl<const N: usize> RsaPublicKey<N> {
 
     pub(super) fn modulus(&self) -> &BigUint<N> {
         &self.n
+    }
+
+    /// The modulus `n` as a big-endian byte string of `size()` bytes.
+    #[must_use]
+    pub fn modulus_be(&self) -> Vec<u8> {
+        to_fixed_be(&self.n, self.modulus_bytes)
+    }
+
+    /// The public exponent `e`.
+    #[must_use]
+    pub fn exponent(&self) -> u64 {
+        self.e
     }
 
     pub(super) fn raw(&self, m: &BigUint<N>) -> BigUint<N> {
@@ -193,6 +218,21 @@ impl<const N: usize, const H: usize> RsaPrivateKey<N, H> {
     #[must_use]
     pub fn public_key(&self) -> &RsaPublicKey<N> {
         &self.public
+    }
+
+    /// Export the raw CRT components as big-endian byte strings
+    /// `(n, e, p, q, dp, dq, qinv)`. Handle with care.
+    #[must_use]
+    pub fn export_components(&self) -> RsaComponents {
+        RsaComponents {
+            n: self.public.n.to_be_bytes(),
+            e: self.public.e,
+            p: self.p.to_be_bytes(),
+            q: self.q.to_be_bytes(),
+            dp: self.dp.to_be_bytes(),
+            dq: self.dq.to_be_bytes(),
+            qinv: self.qinv.to_be_bytes(),
+        }
     }
 
     /// CRT private-key primitive: `c -> c^d mod n`.
