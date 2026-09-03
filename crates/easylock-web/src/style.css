@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* Obsidian palette — sleek industrial dark. */
+@theme {
+  --color-obsidian-950: #0b0d10;
+  --color-obsidian-900: #0f1216;
+  --color-obsidian-850: #141821;
+  --color-obsidian-800: #191e28;
+  --color-obsidian-700: #232a37;
+  --color-obsidian-600: #2f3947;
+  --color-accent-400: #6bb7f0;
+  --color-accent-500: #3d8fd6;
+  --color-accent-600: #2f74b3;
+}
+
+@layer base {
+  html { color-scheme: dark; }
+  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  ::selection { background: var(--color-accent-600); color: #fff; }
+  /* thin dark scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: var(--color-obsidian-600) transparent; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { background: var(--color-obsidian-600); border-radius: 4px; }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-md bg-obsidian-850 border border-obsidian-700 px-3 py-2
+           text-sm text-slate-100 placeholder:text-slate-500
+           focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/40;
+  }
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm
+           font-semibold text-white transition hover:bg-accent-500
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-md border border-obsidian-700
+           bg-obsidian-800 px-3 py-1.5 text-xs font-medium text-slate-300
+           transition hover:border-accent-500 hover:text-white;
+  }
+  .card {
+    @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 p-5 shadow-lg shadow-black/30;
+  }
+  .out {
+    @apply block w-full rounded-md border border-obsidian-700 bg-obsidian-850 p-3
+           font-mono text-[12.5px] leading-relaxed break-all whitespace-pre-wrap
+           text-emerald-300 min-h-[2.5rem] cursor-copy;
+  }
+  .label { @apply block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5; }
+  .tree-cat {
+    @apply flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm font-semibold
+           text-slate-300 transition hover:bg-obsidian-800;
+  }
+  .tree-leaf {
+    @apply flex w-full items-center gap-2 rounded-md py-1.5 pl-8 pr-2.5 text-[13px]
+           text-slate-400 transition hover:bg-obsidian-800 hover:text-slate-100;
+  }
+  .tree-leaf.active {
+    @apply bg-accent-600/15 text-accent-400 border-l-2 border-accent-500;
+  }
+}

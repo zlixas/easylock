@@ -20,11 +20,13 @@ is implemented in-tree.
 |-------|----------|
 | [`easylock-core`](crates/easylock-core) | Zero-dependency primitives, constant-time `BigUint<N>` + Montgomery engine, Curve25519, RSA, and the `extern "C"` FFI. |
 | [`easylock-cli`](crates/easylock-cli) | `easylock` command — `hash` / `encode` / `decode` / `encrypt` / `decrypt`, English & Turkish output, full stdin/stdout streaming. |
-| [`easylock-server`](crates/easylock-server) | Async REST API over `tokio` + `axum`. |
-| [`easylock-gui`](crates/easylock-gui) | Tauri v2 desktop app — file encrypt/decrypt, hashing, encoding pipelines, key generation. Talks to `easylock-core` over Tauri IPC (no HTTP server). |
+| [`easylock-server`](crates/easylock-server) | Async REST API (`tokio` + `axum`) — also static-hosts the web dashboard. |
+| [`easylock-gui`](crates/easylock-gui) | Tauri v2 **desktop** app — file encrypt/decrypt, hashing, pipelines, key generation. Talks to `easylock-core` over Tauri IPC (no HTTP). |
+| [`easylock-web`](crates/easylock-web) | Vite + Tailwind v4 **web** dashboard — tree navigation, floating multi-clipboard, EN/TR. Talks to `easylock-server`. |
 
 `easylock-core` has **no runtime dependencies**. The CLI adds only `clap`; the
-server adds `tokio`, `axum`, `serde`; the GUI adds `tauri`.
+server adds `tokio` / `axum` / `tower-http`; the desktop GUI adds `tauri`; the
+web dashboard is a static Node/Vite build.
 
 ## Platform support
 
@@ -92,7 +94,7 @@ commands call `easylock-core` directly; secret buffers are `Zeroize`d after use.
 
 ```sh
 cargo build --workspace --release
-cargo test  --workspace              # ~120 tests, all vector-backed
+cargo test  --workspace              # ~165 tests, all vector-backed
 cargo clippy --workspace --all-targets   # clean under clippy::pedantic
 cargo bench -p easylock-core
 
@@ -154,21 +156,44 @@ easylock: bilinmeyen özet algoritması: yok
 Cryptographic identifiers (`sha256`, `aes-256-gcm`, …), hex/Base64 payloads, and
 the crate's Rust API stay in English by design.
 
-## Server
+## Server + web dashboard
+
+`easylock-server` is both the REST API **and** the static host for the
+`easylock-web` dashboard.
 
 ```sh
+# 1. build the frontend
+cd crates/easylock-web && npm install && npm run build && cd -
+# 2. run the server (serves ../easylock-web/dist + the API on one origin)
 EASYLOCK_LISTEN=127.0.0.1:8080 easylock-server
-
-curl localhost:8080/health
-curl -XPOST localhost:8080/v1/hash \
-  -d '{"algo":"sha256","data":"YWJj"}'         # data is Base64 (or set "hex":true)
-curl -XPOST localhost:8080/v1/ed25519/sign \
-  -d '{"seed_hex":"00..","message":"aGk="}'
+open http://localhost:8080
 ```
 
-Endpoints: `/health`, `/v1/hash`, `/v1/aead/seal`, `/v1/aead/open`, `/v1/x25519`,
-`/v1/ed25519/sign`, `/v1/ed25519/verify`. Binary fields are Base64 unless the key
-ends in `_hex`.
+For frontend development with hot-reload, `npm run dev` starts Vite on `:5173`
+and proxies `/v1` + `/health` to the server on `:8080`.
+
+**API** (JSON; binary fields are Base64 unless the key ends `_hex`):
+
+| Path | Purpose |
+|---|---|
+| `GET /health` | version + active AES / GHASH backends |
+| `POST /v1/hash` | SHA-2/3, Keccak, BLAKE3 |
+| `POST /v1/aead/seal` · `/open` | AES-256-GCM / ChaCha20-Poly1305 |
+| `POST /v1/kdf/argon2` · `/kdf/pbkdf2` | password hashing / KDF |
+| `POST /v1/encode` | `{input, steps[], decode}` transform pipeline |
+| `POST /v1/password` | CSPRNG password generator |
+| `POST /v1/keygen` | `{kind}` → ed25519 / x25519 / rsa2048 / mlkem512-1024 |
+| `POST /v1/mlkem/encaps` · `/decaps` | ML-KEM encapsulate / decapsulate |
+| `POST /v1/x25519`, `/v1/ed25519/sign` · `/verify` | Curve25519 |
+
+### Dashboard
+
+A dark "obsidian" single-page app (Vite + Tailwind v4, no framework) with a
+**vertical tree sidebar** (🔒 Symmetric · 🔑 Asymmetric & Keys · ⚡ Hashing & KDF ·
+🔄 Pipeline · 🛡️ Utilities), drag-and-drop file zones, a live **EN / TR** toggle,
+and a **floating multi-clipboard dock** (bottom-right, 5-item stack, one-click
+copy, clear-all, best-effort zeroize on tab close / 5-min idle). Every
+hash/encrypt/keygen result is auto-pushed to the dock.
 
 ## FFI
 
