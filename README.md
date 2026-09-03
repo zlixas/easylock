@@ -21,9 +21,10 @@ is implemented in-tree.
 | [`easylock-core`](crates/easylock-core) | Zero-dependency primitives, constant-time `BigUint<N>` + Montgomery engine, Curve25519, RSA, and the `extern "C"` FFI. |
 | [`easylock-cli`](crates/easylock-cli) | `easylock` command — `hash` / `encode` / `decode` / `encrypt` / `decrypt`, English & Turkish output, full stdin/stdout streaming. |
 | [`easylock-server`](crates/easylock-server) | Async REST API over `tokio` + `axum`. |
+| [`easylock-gui`](crates/easylock-gui) | Tauri v2 desktop app — file encrypt/decrypt, hashing, encoding pipelines, key generation. Talks to `easylock-core` over Tauri IPC (no HTTP server). |
 
 `easylock-core` has **no runtime dependencies**. The CLI adds only `clap`; the
-server adds `tokio`, `axum`, `serde`.
+server adds `tokio`, `axum`, `serde`; the GUI adds `tauri`.
 
 ## Platform support
 
@@ -32,29 +33,33 @@ Builds and runs natively, with no system libraries, on:
 - macOS: `aarch64-apple-darwin` (Apple silicon), `x86_64-apple-darwin`
 - Linux: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`
 
-AES dispatches at runtime:
+AES **and** GHASH dispatch at runtime:
 
-| Target | Fast path | Fallback |
-|--------|-----------|----------|
-| x86-64 | AES-NI (`aesenc`/`aesenclast`) | constant-time `x^254` S-box |
-| aarch64 | ARMv8 crypto extension (`aese`/`aesmc`) | constant-time `x^254` S-box |
+| Target | AES fast path | GHASH fast path | Fallback (both) |
+|--------|---------------|-----------------|-----------------|
+| x86-64 | AES-NI (`aesenc`) | `PCLMULQDQ` | constant-time software |
+| aarch64 | ARMv8 crypto (`aese`) | `PMULL` | constant-time software |
 
-GHASH currently uses the branch-free portable multiply on all targets
-(`build_info()` / `GET /health` report the active AES backend).
+`build_info()` / `GET /health` / the GUI status bar report both active backends.
 
 ## Feature status
 
 **Implemented and vector-tested**
 
-- Hashing: SHA-256, SHA-512, Keccak-256, SHA3-256
+- Hashing: SHA-256, SHA-512, Keccak-256, SHA3-256, **SHA3-512**, **BLAKE3**
+  (+ keyed / derive-key / XOF), **BLAKE2b**, **SHAKE128/256**
 - MAC: HMAC (any hash), Poly1305
-- KDF: PBKDF2, HKDF
-- AEAD: ChaCha20-Poly1305 (RFC 8439), AES-256-GCM (SP 800-38D)
+- KDF / password hashing: PBKDF2, HKDF, **Argon2id / Argon2i / Argon2d** (RFC 9106)
+- AEAD: ChaCha20-Poly1305 (RFC 8439), AES-256-GCM (SP 800-38D) with a
+  **hardware carry-less GHASH** backend
 - Stream/block: ChaCha20, AES-256 (HW + portable), AES-256-CTR, multi-byte XOR
 - Big integers: `BigUint<N>` — constant-time add/sub/compare, schoolbook &
   Karatsuba multiply, Montgomery multiplication + constant-time powering ladder
 - Curve25519: X25519 ECDH (RFC 7748), Ed25519 sign/verify (RFC 8032)
-- RSA-2048 / 4096: PKCS#1 v1.5 sign/verify and encrypt/decrypt, CRT private ops
+- RSA-2048 / 4096: PKCS#1 v1.5 sign/verify + encrypt/decrypt, **RSAES-OAEP /
+  PKCS#1 v2.2** (MGF1), CRT private ops, and **key generation** (Miller-Rabin
+  prime search)
+- **Post-quantum: ML-KEM-512 / 768 / 1024** (FIPS 203) — KATs match `kyber-py`
 - Encodings: Hex, Base64, Base64URL, Base58, ROT13 — with pipeline chaining
 - Memory hygiene: `write_volatile` zeroization, `Zeroizing<T>`, `Secret<N>`,
   zeroize-on-drop for every keyed/stateful type
@@ -64,11 +69,24 @@ GHASH currently uses the branch-free portable multiply on all targets
 
 **Deferred to a later milestone**
 
-- BLAKE3, Argon2id (hashing/KDF)
-- Hardware GHASH (PCLMULQDQ / PMULL) — AES block already uses hardware
-- RSA key generation (needs a vetted prime search) and OAEP/PSS padding
-- DER/PEM key parsing
+- ML-DSA / SLH-DSA (post-quantum signatures)
+- RSA-PSS padding; DER/PEM key parsing and export
 - gRPC (`tonic`) — the REST router is kept thin so a gRPC service can mount beside it
+
+## Desktop GUI
+
+```sh
+cargo tauri dev  --config crates/easylock-gui/tauri.conf.json   # or:
+cd crates/easylock-gui && cargo tauri build
+```
+
+A dark-themed Tauri v2 app with four tabs — **Files** (drag-and-drop
+encrypt/decrypt, Argon2id-derived keys, chunked AEAD with a progress bar),
+**Hash** (text or file → SHA-256 / BLAKE3 / Keccak-256 / … with a compare box),
+**Convert** (real-time Base64/Hex/Base58/ROT13 pipeline), and **Keys**
+(secure passwords, Argon2id PHC strings, Ed25519 / X25519 / **ML-KEM-768** /
+RSA-2048 key pairs). A live **EN / TR** switch localises the whole UI. IPC
+commands call `easylock-core` directly; secret buffers are `Zeroize`d after use.
 
 ## Build & test
 

@@ -1,0 +1,32 @@
+[package]
+name = "easylock-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Tauri v2 desktop GUI for easylock — encrypt/decrypt, hashing, encoding, key generation"
+
+[lib]
+name = "easylock_gui_lib"
+# `cdylib` for the mobile targets Tauri supports; `staticlib` unused here but
+# harmless. `rlib` lets the binary link the library.
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+easylock-core = { workspace = true }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true
+
+[features]
+# Default Tauri custom-protocol for release builds.
+custom-protocol = ["tauri/custom-protocol"]

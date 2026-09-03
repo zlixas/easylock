@@ -4,6 +4,7 @@ members = [
     "crates/easylock-core",
     "crates/easylock-cli",
     "crates/easylock-server",
+    "crates/easylock-gui",
 ]
 
 [workspace.package]
