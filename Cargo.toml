@@ -5,6 +5,7 @@ members = [
     "crates/easylock-cli",
     "crates/easylock-server",
     "crates/easylock-gui",
+    "crates/easylock-wasm",
 ]
 
 [workspace.package]

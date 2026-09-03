@@ -2,6 +2,7 @@ import "./style.css";
 import { h, clear, icon, ICONS } from "./ui.js";
 import { t, getLang, setLang, onLangChange } from "./i18n.js";
 import { api } from "./api.js";
+import { initWasm } from "./wasm.js";
 import { mountClipboard } from "./clipboard.js";
 import { bindStatus } from "./widgets.js";
 import { TOOLS } from "./tools.js";
@@ -96,14 +97,16 @@ function navigate(id) {
   renderWorkspace();
 }
 
-async function checkServer() {
+async function showEngine() {
   try {
     const hb = await api.health();
-    serverPill.textContent = `● server ${hb.version} · aes:${hb.aes_backend} · ghash:${hb.ghash_backend}`;
+    serverPill.textContent = `● wasm engine · easylock-core ${hb.version} · ${t("engine.local")}`;
     serverPill.className = "font-mono text-[11px] text-emerald-400";
-  } catch {
-    serverPill.textContent = "● " + t("msg.serverDown");
+    serverPill.title = hb.build || "";
+  } catch (e) {
+    serverPill.textContent = "● wasm engine failed to load";
     serverPill.className = "font-mono text-[11px] text-red-400";
+    serverPill.title = String(e);
   }
 }
 
@@ -141,15 +144,26 @@ function layout() {
   mountClipboard(app);
 }
 
-onLangChange(() => { layout(); renderSidebar(); renderWorkspace(); checkServer(); });
+onLangChange(() => { layout(); renderSidebar(); renderWorkspace(); showEngine(); });
 window.addEventListener("hashchange", () => {
   const id = location.hash.slice(1);
   if (id && id !== current && TOOLS[id]) navigate(id);
 });
 
 document.documentElement.lang = getLang();
-layout();
-renderSidebar();
-renderWorkspace();
-checkServer();
-setInterval(checkServer, 15000);
+
+// Boot: show a loading state, initialise WASM, then render the app.
+app.append(h("div", { class: "flex h-screen items-center justify-center text-slate-500 font-mono text-sm" }, "loading crypto engine…"));
+initWasm()
+  .then(() => {
+    layout();
+    renderSidebar();
+    renderWorkspace();
+    showEngine();
+  })
+  .catch((e) => {
+    clear(app);
+    app.append(h("div", { class: "m-10 rounded-lg border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-300" },
+      h("div", { class: "font-bold mb-2" }, "Failed to load the WebAssembly engine"),
+      h("pre", { class: "whitespace-pre-wrap text-xs" }, String(e.stack || e))));
+  });

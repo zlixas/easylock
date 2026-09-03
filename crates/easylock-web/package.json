@@ -3,18 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Web dashboard for easylock — talks to easylock-server",
+  "description": "Web dashboard for easylock — runs easylock-core in-browser via WebAssembly",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "wasm": "wasm-pack build ../easylock-wasm --target web --out-dir ../easylock-web/src/pkg --release",
+    "dev": "npm run wasm && vite",
+    "build": "npm run wasm && vite build",
+    "preview": "vite preview --port 4173"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",
     "tailwindcss": "^4.1.13",
     "vite": "^6.3.5"
-  },
-  "allowScripts": {
-    "esbuild@0.25.12": true
   }
 }

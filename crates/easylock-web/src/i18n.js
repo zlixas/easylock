@@ -65,6 +65,7 @@ const DICT = {
     "msg.valid": "Signature valid ✓",
     "msg.invalid": "Signature INVALID ✕",
     "msg.serverDown": "easylock-server not reachable at :8080",
+    "engine.local": "everything runs in your browser",
   },
   tr: {
     "app.subtitle": "kriptografi panosu",
@@ -132,6 +133,7 @@ const DICT = {
     "msg.valid": "İmza geçerli ✓",
     "msg.invalid": "İmza GEÇERSİZ ✕",
     "msg.serverDown": ":8080 üzerinde easylock-server'a ulaşılamıyor",
+    "engine.local": "her şey tarayıcınızda çalışır",
   },
 };
 
