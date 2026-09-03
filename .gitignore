@@ -4,3 +4,12 @@ Cargo.lock.orig
 .DS_Store
 *.profraw
 /crates/easylock-core/include/easylock_generated.h
+
+# easylock-web (Node/Vite)
+node_modules/
+crates/easylock-web/dist/
+crates/easylock-web/.vite/
+*.tsbuildinfo
+
+# easylock-gui (Tauri generated)
+crates/easylock-gui/gen/
