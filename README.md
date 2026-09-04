@@ -2,7 +2,7 @@
 
 A from-scratch cryptography library, CLI, and HTTP engine written in Rust — an
 exploration of what a small OpenSSL alternative looks like when every primitive
-is implemented in-tree.
+is implemented in-tree. Site : https://zlixas.github.io/easylock/
 
 > [!WARNING]
 > **Not audited. Not for protecting real secrets.**
