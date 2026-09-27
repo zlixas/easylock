@@ -1,7 +1,11 @@
 //! Password-based container formats shared by every easylock front-end
 //! (CLI, TUI, desktop GUI, web dashboard):
 //!
-//! * [`seal_file`] / [`open_file`] — the chunked binary **`.elk`** file format.
+//! * [`stream`] — streaming, multi-core **ELK2** `.elk` files with password and/or
+//!   public-key ([`elk2::Recipient`]) key slots; also reads ELK1. **Use this.**
+//! * [`archive`] — the folder archive stored inside encrypted folders.
+//! * [`seal_file`] / [`open_file`] — the original in-memory **ELK1** format (kept for
+//!   `no_std` users and for reading old files).
 //! * [`seal_token`] / [`open_token`] — the compact **`elk1.`** text token.
 //!
 //! Both derive a 256-bit key from the password with Argon2id (the parameters
@@ -27,6 +31,12 @@
 //!
 //! `"elk1." ‖ base64url_nopad(cipher ‖ salt[16] ‖ nonce[12] ‖ AEAD(text))`,
 //! Argon2id m = 19 MiB, t = 2, p = 1, associated data `"elk1"`.
+
+#[cfg(feature = "std")]
+pub mod archive;
+pub mod elk2;
+#[cfg(feature = "std")]
+pub mod stream;
 
 use crate::aead::{Aead, Aes256Gcm, ChaCha20Poly1305};
 use crate::encode::base64;
@@ -178,14 +188,16 @@ pub fn parse_header(bytes: &[u8]) -> Result<Header> {
     let mut base_nonce = [0u8; 12];
     salt.copy_from_slice(&bytes[17..33]);
     base_nonce.copy_from_slice(&bytes[33..45]);
+    let params = Params {
+        m_cost: u32_at(5),
+        t_cost: u32_at(9),
+        parallelism: u32_at(13),
+        out_len: 32,
+    };
+    elk2::check_params(&params)?;
     Ok(Header {
         cipher: Cipher::from_id(bytes[4])?,
-        params: Params {
-            m_cost: u32_at(5),
-            t_cost: u32_at(9),
-            parallelism: u32_at(13),
-            out_len: 32,
-        },
+        params,
         salt,
         base_nonce,
     })
