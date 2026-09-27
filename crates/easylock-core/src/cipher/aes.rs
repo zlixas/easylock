@@ -127,6 +127,39 @@ impl Aes256 {
         }
     }
 
+    /// Encrypt many independent blocks in place (8 at a time on hardware backends).
+    pub fn encrypt_blocks(&self, blocks: &mut [[u8; 16]]) {
+        let mut groups = blocks.chunks_exact_mut(8);
+        match self.backend {
+            #[cfg(target_arch = "x86_64")]
+            Backend::AesNi => {
+                for g in &mut groups {
+                    let g: &mut [[u8; 16]; 8] = g.try_into().expect("chunk of 8");
+                    // SAFETY: `AesNi` is only selected after detecting `aes`.
+                    unsafe { x86::encrypt_blocks8(&self.round_keys, g) };
+                }
+            }
+            #[cfg(target_arch = "aarch64")]
+            Backend::Armv8 => {
+                for g in &mut groups {
+                    let g: &mut [[u8; 16]; 8] = g.try_into().expect("chunk of 8");
+                    // SAFETY: `Armv8` is only selected after detecting `aes`.
+                    unsafe { arm::encrypt_blocks8(&self.round_keys, g) };
+                }
+            }
+            _ => {
+                for g in &mut groups {
+                    for b in g {
+                        soft::encrypt_block(&self.round_keys, b);
+                    }
+                }
+            }
+        }
+        for b in groups.into_remainder() {
+            self.encrypt_block_into(b);
+        }
+    }
+
     /// Encrypt a block, returning a fresh array.
     #[must_use]
     pub fn encrypt_block(&self, mut block: [u8; 16]) -> [u8; 16] {
@@ -138,6 +171,9 @@ impl Aes256 {
 impl BlockCipher for Aes256 {
     fn encrypt_block(&self, block: &mut [u8; 16]) {
         self.encrypt_block_into(block);
+    }
+    fn encrypt_blocks(&self, blocks: &mut [[u8; 16]]) {
+        Aes256::encrypt_blocks(self, blocks);
     }
 }
 

@@ -203,6 +203,22 @@ The desktop app has four tabs: **Files** (drag-and-drop `.elk` encryption with s
 There is also **`easylock-server`**, an `axum` REST API (`/v1/hash`, `/v1/aead/*`, `/v1/kdf/*`, `/v1/keygen`, …) that can
 also serve the web dashboard.
 
+## Performance
+
+These are single-process numbers on an Apple M4, measured with `cargo bench -p easylock-core` and `time`. All of it is still from-scratch code with
+no dependencies. The hardware paths use each CPU's own instructions, selected at runtime, and fall back to constant-time software.
+
+| Operation | Before | Now | Technique |
+|---|---:|---:|---|
+| AES-256-GCM (256 KiB) | 1.0 GB/s | **4.3 GB/s** | 8-block interleaved AES-NI / ARMv8 AES, aggregated PCLMUL/PMULL GHASH (H¹…H⁸) |
+| ChaCha20-Poly1305 (256 KiB) | 0.49 GB/s | **1.05 GB/s** | 4-block NEON / SSE2 ChaCha20, 64-bit-limb Poly1305 |
+| SHA-256 (256 KiB) | 0.37 GB/s | **2.4 GB/s** | ARMv8 SHA2 / Intel SHA-NI instructions |
+| Argon2id 64 MiB, t=3, p=4 | 121 ms | **32 ms** | lanes filled on multiple cores, no block copies |
+| `lock` 500 MB file → /dev/null | 1.41 s, 1 GB RAM | **0.10–0.15 s, ~120 MB** | streaming, multi-core pipeline |
+| `unlock` 500 MB file → /dev/null | 1.31 s | **0.18 s** | pipelined read-ahead, bulk zeroization |
+
+Every fast path is checked against the portable implementation in a differential test, on ARM natively and on x86-64 under Rosetta and in CI.
+
 ## Architecture
 
 ```mermaid

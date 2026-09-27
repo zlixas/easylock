@@ -45,11 +45,8 @@ impl<'c, C: BlockCipher> Ctr<'c, C> {
         }
     }
 
-    fn refill(&mut self) {
-        self.keystream = self.counter;
-        self.cipher.encrypt_block(&mut self.keystream);
-        self.ks_pos = 0;
-
+    /// Increment the low `inc_width` bytes of the counter (big-endian, wrapping).
+    fn increment(&mut self) {
         let start = 16 - self.inc_width;
         let mut carry = 1u16;
         let mut i = 16;
@@ -61,8 +58,39 @@ impl<'c, C: BlockCipher> Ctr<'c, C> {
         }
     }
 
+    fn refill(&mut self) {
+        self.keystream = self.counter;
+        self.cipher.encrypt_block(&mut self.keystream);
+        self.ks_pos = 0;
+        self.increment();
+    }
+
     /// XOR `data` in place with the keystream (encrypt == decrypt).
-    pub fn apply(&mut self, data: &mut [u8]) {
+    pub fn apply(&mut self, mut data: &mut [u8]) {
+        // Drain buffered keystream first.
+        while self.ks_pos < 16 && !data.is_empty() {
+            data[0] ^= self.keystream[self.ks_pos];
+            self.ks_pos += 1;
+            data = &mut data[1..];
+        }
+        // Bulk: 8 counter blocks per batch, encrypted together.
+        let mut ks = [[0u8; 16]; 8];
+        while data.len() >= 128 {
+            for b in &mut ks {
+                *b = self.counter;
+                self.increment();
+            }
+            self.cipher.encrypt_blocks(&mut ks);
+            for (chunk, k) in data[..128].chunks_exact_mut(16).zip(ks.iter()) {
+                let v = u128::from_ne_bytes(chunk.try_into().expect("16 bytes"))
+                    ^ u128::from_ne_bytes(*k);
+                chunk.copy_from_slice(&v.to_ne_bytes());
+            }
+            data = &mut data[128..];
+        }
+        for b in &mut ks {
+            b.zeroize();
+        }
         for byte in data.iter_mut() {
             if self.ks_pos == 16 {
                 self.refill();
@@ -139,5 +167,28 @@ mod tests {
         let mut ctr = Ctr::with_counter(&aes, [0xff; 16]);
         let mut a = [0u8; 48];
         ctr.keystream_into(&mut a);
+    }
+
+    #[test]
+    fn bulk_path_matches_bytewise_for_any_split() {
+        use crate::cipher::aes::Aes256;
+        let aes = Aes256::new(&[0x11; 32]).unwrap();
+        let mut reference = alloc::vec![0u8; 1000];
+        {
+            let mut c = Ctr::from_nonce96_inc32(&aes, &[7; 12], u32::MAX - 3); // wraps inside
+            c.keystream_into(&mut reference);
+        }
+        for splits in [&[1000usize][..], &[1, 127, 128, 129, 615], &[17; 59]] {
+            let mut buf = alloc::vec![0u8; 1000];
+            let mut c = Ctr::from_nonce96_inc32(&aes, &[7; 12], u32::MAX - 3);
+            let mut pos = 0;
+            for &n in splits {
+                let end = (pos + n).min(1000);
+                c.apply(&mut buf[pos..end]);
+                pos = end;
+            }
+            c.apply(&mut buf[pos..]);
+            assert_eq!(buf, reference, "{splits:?}");
+        }
     }
 }

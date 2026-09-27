@@ -154,23 +154,25 @@ pub fn derive(
     h0.zeroize();
     seed.zeroize();
 
-    // Passes.
+    // Passes. Within one slice every lane writes only its own segment and reads
+    // only blocks outside the other lanes' current segments (RFC 9106 §3.4), so
+    // lanes can be filled concurrently.
+    let mem = Mem {
+        ptr: memory.as_mut_ptr(),
+        len: memory.len(),
+    };
+    let geo = Geometry {
+        variant,
+        lanes,
+        lane_length,
+        segment_length,
+        m_prime,
+        passes: params.t_cost,
+    };
+    let threads = worker_threads(lanes);
     for pass in 0..params.t_cost {
         for slice in 0..SYNC_POINTS {
-            for lane in 0..lanes {
-                fill_segment(
-                    &mut memory,
-                    variant,
-                    pass,
-                    slice,
-                    lane,
-                    lanes,
-                    lane_length,
-                    segment_length,
-                    m_prime,
-                    params.t_cost,
-                );
-            }
+            run_slice(&mem, &geo, pass, slice, threads);
         }
     }
 
@@ -197,21 +199,98 @@ pub fn derive(
     Ok(tag)
 }
 
-// `curr_offset` / `prev_offset` track memory positions with lane-length
-// wraparound that a plain counted loop cannot express.
-#[allow(clippy::too_many_arguments, clippy::explicit_counter_loop)]
-fn fill_segment(
-    memory: &mut [[u64; BLOCK_WORDS]],
+/// Shared view of the memory matrix used by concurrently running lanes.
+struct Mem {
+    ptr: *mut [u64; BLOCK_WORDS],
+    len: usize,
+}
+
+// SAFETY: `Mem` is only used inside `run_slice`, where each thread writes only its
+// own lane's current segment and reads only blocks that no thread is writing
+// during that slice (Argon2's reference-set rules); the matrix outlives the scope.
+unsafe impl Sync for Mem {}
+
+impl Mem {
+    /// # Safety
+    /// `i < len`, and no thread may be writing block `i` concurrently.
+    unsafe fn get(&self, i: usize) -> &[u64; BLOCK_WORDS] {
+        debug_assert!(i < self.len);
+        // SAFETY: guaranteed by the caller.
+        unsafe { &*self.ptr.add(i) }
+    }
+
+    /// # Safety
+    /// `i < len`, block `i` belongs to the calling lane's current segment, and no
+    /// other reference to it is alive.
+    #[allow(clippy::mut_from_ref)]
+    unsafe fn get_mut(&self, i: usize) -> &mut [u64; BLOCK_WORDS] {
+        debug_assert!(i < self.len);
+        // SAFETY: guaranteed by the caller.
+        unsafe { &mut *self.ptr.add(i) }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Geometry {
     variant: Variant,
-    pass: u32,
-    slice: u32,
-    lane: u32,
     lanes: u32,
     lane_length: u32,
     segment_length: u32,
     m_prime: u32,
     passes: u32,
-) {
+}
+
+/// Threads to use for `lanes` lanes (1 without `std`, or where threads are unavailable).
+fn worker_threads(lanes: u32) -> usize {
+    #[cfg(all(feature = "std", not(target_family = "wasm")))]
+    {
+        let cores = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        cores.min(lanes as usize).max(1)
+    }
+    #[cfg(not(all(feature = "std", not(target_family = "wasm"))))]
+    {
+        let _ = lanes;
+        1
+    }
+}
+
+fn run_slice(mem: &Mem, geo: &Geometry, pass: u32, slice: u32, threads: usize) {
+    #[cfg(all(feature = "std", not(target_family = "wasm")))]
+    if threads > 1 {
+        let lanes = geo.lanes as usize;
+        let per = lanes.div_ceil(threads);
+        std::thread::scope(|s| {
+            for first in (per..lanes).step_by(per) {
+                s.spawn(move || {
+                    for lane in first..(first + per).min(lanes) {
+                        fill_segment(mem, geo, pass, slice, lane as u32);
+                    }
+                });
+            }
+            for lane in 0..per.min(lanes) {
+                fill_segment(mem, geo, pass, slice, lane as u32);
+            }
+        });
+        return;
+    }
+    let _ = threads;
+    for lane in 0..geo.lanes {
+        fill_segment(mem, geo, pass, slice, lane);
+    }
+}
+
+// `curr_offset` / `prev_offset` track memory positions with lane-length
+// wraparound that a plain counted loop cannot express.
+#[allow(clippy::explicit_counter_loop)]
+fn fill_segment(mem: &Mem, geo: &Geometry, pass: u32, slice: u32, lane: u32) {
+    let Geometry {
+        variant,
+        lanes,
+        lane_length,
+        segment_length,
+        m_prime,
+        passes,
+    } = *geo;
     let data_independent = matches!(variant, Variant::I)
         || (matches!(variant, Variant::Id) && pass == 0 && slice < SYNC_POINTS / 2);
 
@@ -249,7 +328,9 @@ fn fill_segment(
             }
             address_block[(i as usize) % ADDRESSES_PER_BLOCK]
         } else {
-            memory[prev_offset as usize][0]
+            // SAFETY: `prev_offset` is this lane's previous block (written by this
+            // thread, in bounds).
+            unsafe { mem.get(prev_offset as usize)[0] }
         };
 
         let mut ref_lane = (pseudo_rand >> 32) % u64::from(lanes);
@@ -270,11 +351,17 @@ fn fill_segment(
         let ref_block_idx = (ref_lane as u32 * lane_length + ref_index) as usize;
         let with_xor = pass != 0;
 
-        // fill_block(prev, ref, curr): need three disjoint borrows.
-        let prev = memory[prev_offset as usize];
-        let refb = memory[ref_block_idx];
-        let curr = &mut memory[curr_offset as usize];
-        fill_block(&prev, &refb, curr, with_xor);
+        // SAFETY: all three indices are < m_prime. `curr` is in this lane's current
+        // segment (only this thread writes it); `prev` and `refb` are distinct from
+        // `curr` and, by the reference-set rules, not being written by any thread.
+        let (prev, refb, curr) = unsafe {
+            (
+                mem.get(prev_offset as usize),
+                mem.get(ref_block_idx),
+                mem.get_mut(curr_offset as usize),
+            )
+        };
+        fill_block(prev, refb, curr, with_xor);
 
         curr_offset += 1;
         prev_offset += 1;

@@ -111,12 +111,15 @@ impl Batch {
                             chunk_nonce(&base, i),
                             chunk_aad(i, ends_file && pos == n - 1),
                         );
-                        let r = match mode {
-                            Mode::Seal => Ok(keyed.seal(&nonce, &aad, &data)),
+                        match mode {
+                            Mode::Seal => {
+                                let r = Ok(keyed.seal(&nonce, &aad, &data));
+                                data.zeroize(); // plaintext
+                                r
+                            }
+                            // ciphertext is not secret: no need to wipe it
                             Mode::Open => keyed.open(&nonce, &aad, &data),
-                        };
-                        data.zeroize();
-                        r
+                        }
                     })
                     .collect()
             };
@@ -432,7 +435,10 @@ impl<R: Read> Decryptor<R> {
         self.out.zeroize();
         self.out.clear();
         self.pos = 0;
-        for r in job.wait() {
+        let opened = job.wait();
+        self.out
+            .reserve(opened.iter().map(|r| r.as_ref().map_or(0, Vec::len)).sum());
+        for r in opened {
             let mut pt = r.map_err(io_error)?;
             self.out.extend_from_slice(&pt);
             pt.zeroize();

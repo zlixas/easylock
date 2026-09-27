@@ -28,6 +28,30 @@ pub struct Sha256 {
 }
 
 impl Sha256 {
+    /// Compress every 64-byte block of `blocks` (length must be a multiple of 64),
+    /// using the SHA-256 instructions when the CPU has them.
+    fn compress_blocks(state: &mut [u32; 8], blocks: &[u8]) {
+        debug_assert_eq!(blocks.len() % 64, 0);
+        if blocks.is_empty() {
+            return;
+        }
+        #[cfg(all(target_arch = "aarch64", not(feature = "force-portable")))]
+        if crate::cpu::features().sha2 {
+            // SAFETY: the `sha2` feature was detected at runtime.
+            unsafe { hw_arm::compress_blocks(state, blocks) };
+            return;
+        }
+        #[cfg(all(target_arch = "x86_64", not(feature = "force-portable")))]
+        if crate::cpu::features().sha2 && std_detect_sse41() {
+            // SAFETY: `sha`, `sse2`, `ssse3` and `sse4.1` were detected at runtime.
+            unsafe { hw_x86::compress_blocks(state, blocks) };
+            return;
+        }
+        for b in blocks.chunks_exact(64) {
+            Self::compress(state, b.try_into().expect("64 bytes"));
+        }
+    }
+
     fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
         let mut w = [0u32; 64];
         for (i, chunk) in block.chunks_exact(4).enumerate() {
@@ -77,6 +101,133 @@ impl Sha256 {
     }
 }
 
+#[cfg(all(target_arch = "x86_64", not(feature = "force-portable")))]
+fn std_detect_sse41() -> bool {
+    #[cfg(feature = "std")]
+    {
+        std::arch::is_x86_feature_detected!("sse4.1")
+            && std::arch::is_x86_feature_detected!("ssse3")
+    }
+    #[cfg(not(feature = "std"))]
+    {
+        cfg!(all(target_feature = "sse4.1", target_feature = "ssse3"))
+    }
+}
+
+/// ARMv8 SHA-256 instructions (`SHA256H`, `SHA256H2`, `SHA256SU0/1`).
+#[cfg(all(target_arch = "aarch64", not(feature = "force-portable")))]
+mod hw_arm {
+    use super::K;
+    use core::arch::aarch64::{
+        vaddq_u32, vld1q_u32, vld1q_u8, vreinterpretq_u32_u8, vrev32q_u8, vsha256h2q_u32,
+        vsha256hq_u32, vsha256su0q_u32, vsha256su1q_u32, vst1q_u32,
+    };
+
+    /// # Safety
+    /// Requires the `sha2` target feature; `blocks.len()` must be a multiple of 64.
+    #[target_feature(enable = "sha2")]
+    pub(super) unsafe fn compress_blocks(state: &mut [u32; 8], blocks: &[u8]) {
+        // SAFETY: all loads/stores address 16-byte windows inside `state`, `K`
+        // (64 words) or the current 64-byte block; NEON accesses are unaligned-safe.
+        unsafe {
+            let mut abcd = vld1q_u32(state.as_ptr());
+            let mut efgh = vld1q_u32(state.as_ptr().add(4));
+            for block in blocks.chunks_exact(64) {
+                let (abcd0, efgh0) = (abcd, efgh);
+                let p = block.as_ptr();
+                let mut m = [
+                    vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(p))),
+                    vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(p.add(16)))),
+                    vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(p.add(32)))),
+                    vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(p.add(48)))),
+                ];
+                for i in 0..16 {
+                    let wk = vaddq_u32(m[i % 4], vld1q_u32(K.as_ptr().add(4 * i)));
+                    let prev = abcd;
+                    abcd = vsha256hq_u32(abcd, efgh, wk);
+                    efgh = vsha256h2q_u32(efgh, prev, wk);
+                    if i < 12 {
+                        m[i % 4] = vsha256su1q_u32(
+                            vsha256su0q_u32(m[i % 4], m[(i + 1) % 4]),
+                            m[(i + 2) % 4],
+                            m[(i + 3) % 4],
+                        );
+                    }
+                }
+                abcd = vaddq_u32(abcd, abcd0);
+                efgh = vaddq_u32(efgh, efgh0);
+            }
+            vst1q_u32(state.as_mut_ptr(), abcd);
+            vst1q_u32(state.as_mut_ptr().add(4), efgh);
+        }
+    }
+}
+
+/// Intel/AMD SHA extensions (`SHA256RNDS2`, `SHA256MSG1/2`).
+#[cfg(all(target_arch = "x86_64", not(feature = "force-portable")))]
+mod hw_x86 {
+    use super::K;
+    use core::arch::x86_64::{
+        __m128i, _mm_add_epi32, _mm_alignr_epi8, _mm_blend_epi16, _mm_loadu_si128, _mm_set_epi64x,
+        _mm_sha256msg1_epu32, _mm_sha256msg2_epu32, _mm_sha256rnds2_epu32, _mm_shuffle_epi32,
+        _mm_shuffle_epi8, _mm_storeu_si128,
+    };
+
+    /// # Safety
+    /// Requires `sha`, `sse2`, `ssse3` and `sse4.1`; `blocks.len()` must be a multiple of 64.
+    #[allow(clippy::cast_ptr_alignment)] // only unaligned loadu/storeu
+    #[target_feature(enable = "sha,sse2,ssse3,sse4.1")]
+    pub(super) unsafe fn compress_blocks(state: &mut [u32; 8], blocks: &[u8]) {
+        // SAFETY: loads/stores are unaligned and stay within `state`, `K` or the
+        // current 64-byte block.
+        unsafe {
+            let mask = _mm_set_epi64x(0x0c0d_0e0f_0809_0a0b, 0x0405_0607_0001_0203);
+            let tmp = _mm_shuffle_epi32(_mm_loadu_si128(state.as_ptr().cast::<__m128i>()), 0xB1); // CDAB
+            let mut s1 = _mm_shuffle_epi32(
+                _mm_loadu_si128(state.as_ptr().add(4).cast::<__m128i>()),
+                0x1B,
+            ); // EFGH
+            let mut s0 = _mm_alignr_epi8(tmp, s1, 8); // ABEF
+            s1 = _mm_blend_epi16(s1, tmp, 0xF0); // CDGH
+
+            for block in blocks.chunks_exact(64) {
+                let (abef, cdgh) = (s0, s1);
+                let p = block.as_ptr().cast::<__m128i>();
+                let mut m = [
+                    _mm_shuffle_epi8(_mm_loadu_si128(p), mask),
+                    _mm_shuffle_epi8(_mm_loadu_si128(p.add(1)), mask),
+                    _mm_shuffle_epi8(_mm_loadu_si128(p.add(2)), mask),
+                    _mm_shuffle_epi8(_mm_loadu_si128(p.add(3)), mask),
+                ];
+                for i in 0..16 {
+                    let wk = _mm_add_epi32(
+                        m[i % 4],
+                        _mm_loadu_si128(K.as_ptr().add(4 * i).cast::<__m128i>()),
+                    );
+                    s1 = _mm_sha256rnds2_epu32(s1, s0, wk);
+                    s0 = _mm_sha256rnds2_epu32(s0, s1, _mm_shuffle_epi32(wk, 0x0E));
+                    if i < 12 {
+                        // W[4i+16 .. 4i+20] from W[4i .. 4i+16]
+                        let mut next = _mm_sha256msg1_epu32(m[i % 4], m[(i + 1) % 4]);
+                        next =
+                            _mm_add_epi32(next, _mm_alignr_epi8(m[(i + 3) % 4], m[(i + 2) % 4], 4));
+                        m[i % 4] = _mm_sha256msg2_epu32(next, m[(i + 3) % 4]);
+                    }
+                }
+                s0 = _mm_add_epi32(s0, abef);
+                s1 = _mm_add_epi32(s1, cdgh);
+            }
+
+            let tmp = _mm_shuffle_epi32(s0, 0x1B); // FEBA
+            s1 = _mm_shuffle_epi32(s1, 0xB1); // DCHG
+            let dcba = _mm_blend_epi16(tmp, s1, 0xF0);
+            let hgfe = _mm_alignr_epi8(s1, tmp, 8);
+            _mm_storeu_si128(state.as_mut_ptr().cast::<__m128i>(), dcba);
+            _mm_storeu_si128(state.as_mut_ptr().add(4).cast::<__m128i>(), hgfe);
+        }
+    }
+}
+
 impl Hash for Sha256 {
     const OUTPUT_LEN: usize = 32;
     const BLOCK_LEN: usize = 64;
@@ -104,17 +255,13 @@ impl Hash for Sha256 {
                 return; // buffer still partial; input exhausted
             }
             let block = self.buf;
-            Self::compress(&mut self.state, &block);
+            Self::compress_blocks(&mut self.state, &block);
             self.buf_len = 0;
         }
 
-        let mut chunks = data.chunks_exact(64);
-        for chunk in &mut chunks {
-            let mut block = [0u8; 64];
-            block.copy_from_slice(chunk);
-            Self::compress(&mut self.state, &block);
-        }
-        let rem = chunks.remainder();
+        let full = data.len() - data.len() % 64;
+        Self::compress_blocks(&mut self.state, &data[..full]);
+        let rem = &data[full..];
         self.buf[..rem.len()].copy_from_slice(rem);
         self.buf_len = rem.len();
     }
@@ -221,5 +368,18 @@ mod tests {
             h.update(c);
         }
         assert_eq!(h.finalize_vec(), one);
+    }
+
+    #[test]
+    fn hardware_matches_portable() {
+        let data: alloc::vec::Vec<u8> = (0..64 * 37).map(|i| (i * 7 % 256) as u8).collect();
+        let mut hw = H0;
+        Sha256::compress_blocks(&mut hw, &data);
+        let mut sw = H0;
+        for b in data.chunks_exact(64) {
+            Sha256::compress(&mut sw, b.try_into().unwrap());
+        }
+        assert_eq!(hw, sw);
+        eprintln!("sha2 hardware available: {}", crate::cpu::features().sha2);
     }
 }

@@ -37,3 +37,33 @@ pub unsafe fn encrypt_block(round_keys: &[[u8; 16]; 15], block: &mut [u8; 16]) {
         vst1q_u8(block.as_mut_ptr(), state);
     }
 }
+
+/// Encrypt 8 independent blocks with the rounds interleaved, so the pipelined AES
+/// unit always has work in flight (≈4–6× the single-block throughput).
+///
+/// # Safety
+/// The CPU must support the `aes` target feature.
+#[target_feature(enable = "aes")]
+pub unsafe fn encrypt_blocks8(round_keys: &[[u8; 16]; 15], blocks: &mut [[u8; 16]; 8]) {
+    // SAFETY: every pointer references a 16-byte array; NEON loads/stores are
+    // unaligned-safe.
+    unsafe {
+        let mut rk = [vld1q_u8(round_keys[0].as_ptr()); 15];
+        for (i, k) in rk.iter_mut().enumerate() {
+            *k = vld1q_u8(round_keys[i].as_ptr());
+        }
+        let mut s = [vld1q_u8(blocks[0].as_ptr()); 8];
+        for (i, st) in s.iter_mut().enumerate() {
+            *st = vld1q_u8(blocks[i].as_ptr());
+        }
+        for k in &rk[..13] {
+            for st in &mut s {
+                *st = vaesmcq_u8(vaeseq_u8(*st, *k));
+            }
+        }
+        for (i, st) in s.iter().enumerate() {
+            let v = veorq_u8(vaeseq_u8(*st, rk[13]), rk[14]);
+            vst1q_u8(blocks[i].as_mut_ptr(), v);
+        }
+    }
+}
