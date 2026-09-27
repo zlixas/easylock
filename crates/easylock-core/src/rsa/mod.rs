@@ -269,6 +269,17 @@ impl<const N: usize, const H: usize> RsaPrivateKey<N, H> {
     }
 
     /// PKCS#1 v1.5 decryption. Returns the recovered message.
+    ///
+    /// # Security
+    ///
+    /// **Do not use this for new designs.** Any caller that reveals whether decryption
+    /// failed (an error, a different response, or a timing difference) turns it into
+    /// a Bleichenbacher / Marvin padding oracle that lets an attacker decrypt
+    /// ciphertexts or forge signatures. Use [`RsaPrivateKey::decrypt_oaep`] (RSAES-OAEP)
+    /// instead. This function exists only to interoperate with legacy data.
+    #[deprecated(
+        note = "PKCS#1 v1.5 decryption is a padding-oracle hazard (Bleichenbacher/Marvin); use decrypt_oaep"
+    )]
     pub fn decrypt_pkcs1v15(&self, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let k = self.public.modulus_bytes;
         if ciphertext.len() != k {
@@ -382,6 +393,7 @@ fn pkcs1v15_sig_encode(hash: Algorithm, message: &[u8], k: usize) -> Result<Vec<
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // tests exercise the legacy PKCS#1 v1.5 decryption on purpose
 mod tests {
     use super::*;
     use crate::encode::hex::decode;
