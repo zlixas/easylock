@@ -68,6 +68,11 @@ cargo install --git https://github.com/zlixas/easylock easylock-cli   # installs
 easylock tui                               # full-screen interactive UI
 easylock lock taxes.pdf                    # → taxes.pdf.elk  (asks for a password)
 easylock unlock taxes.pdf.elk              # → taxes.pdf
+easylock lock ~/Photos --shred             # whole folder → Photos.elk, originals wiped
+
+easylock identity                          # your key pair (X25519 + ML-KEM-768)
+easylock lock report.pdf -r elkpub1…       # encrypt for someone, no shared password
+easylock unlock report.pdf.elk             # opens with your identity
 echo -n abc | easylock hash -a blake3
 easylock password -n 3 -l 24 --symbols
 easylock --lang es --help                  # English · Türkçe · Español
@@ -98,12 +103,12 @@ selection, runtime CPU feature dispatch, a C ABI ([`easylock.h`](crates/easylock
 
 <img src="docs/images/web-x25519.png" alt="X25519 key exchange demo" width="720">
 
-The website has 19 tools in five categories. Each one includes a *Learn* panel and runs entirely on your device.
+The website has 20 tools in five categories. Each one includes a *Learn* panel and runs entirely on your device.
 
 | | Tools |
 |---|---|
-| 🔒 Symmetric | Encrypt a file (`.elk`) · Encrypt a message (`elk1.` token) · AES-256-GCM · ChaCha20-Poly1305 |
-| 🔑 Asymmetric | Ed25519 sign & verify · X25519 key-exchange walkthrough (Alice ⇄ Bob) · ML-KEM · RSA-2048 |
+| 🔒 Symmetric | Encrypt a file (`.elk`, password and/or public keys) · Encrypt a message (`elk1.` token) · AES-256-GCM · ChaCha20-Poly1305 |
+| 🔑 Asymmetric | Key pair for file sharing · Ed25519 sign & verify · X25519 key-exchange walkthrough (Alice ⇄ Bob) · ML-KEM · RSA-2048 |
 | ⚡ Hashing & KDF | Live multi-hash · Checksum verifier (detects the algorithm) · HMAC · Argon2id hash & verify · PBKDF2 · HKDF |
 | 🔄 Encoding | Encoding pipeline · JWT inspector (checks HS256/HS512/EdDSA signatures) |
 | 🛡️ Utilities | Password generator · Password strength estimator · Random bytes / tokens / UUIDs / PINs / passphrases |
@@ -111,6 +116,23 @@ The website has 19 tools in five categories. Each one includes a *Learn* panel a
 The site also has a command palette (<kbd>⌘/Ctrl</kbd>+<kbd>K</kbd> or <kbd>/</kbd>), keyboard shortcuts (<kbd>?</kbd>), a layout
 that works on phones, an EN/TR/ES switch (<kbd>Alt</kbd>+<kbd>L</kbd>) and a floating clipboard that holds up to five recent results.
 The clipboard is wiped when you close the tab or after 5 minutes idle.
+
+### 🗄️ File encryption in depth
+
+`easylock lock` is built for real-world use:
+
+- **Streaming and multi-core.** Memory use is constant (≈120 MB, mostly Argon2) at any file size. Chunks are encrypted on all
+  cores in a pipeline. A 500 MB file takes about 0.3 s before the final `fsync`.
+- **Folders.** Whole folder trees go into a single `.elk` file. Extraction is hardened against path traversal.
+- **Public keys.** `-r` encrypts to one or more people using an X25519 + ML-KEM-768 hybrid, so the files are post-quantum
+  secure. You can combine `-r` with `--with-password`.
+- **Safe by default.** Output goes to a temporary file and is renamed only after it has succeeded and been `fsync`ed.
+  Existing files are never overwritten without `--force`. A wrong key leaves nothing behind.
+- **`--shred`.** After a successful encryption, the originals are overwritten and removed.
+- **Pipes.** Example: `tar c dir | easylock lock - -r KEY > backup.elk`.
+- **Compatible.** The same files open on the website and in the desktop app, and old ELK1 files still decrypt.
+
+The byte-level format is documented in [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md).
 
 ### ⌨️ Terminal UI
 
@@ -130,7 +152,9 @@ password-based text encryption, HMAC, Ed25519 sign/verify, an X25519 exchange de
 | `hash` | SHA-2/3, Keccak, BLAKE3 over stdin or files |
 | `encode` / `decode` | chainable Hex/Base64/Base58/ROT13 pipelines |
 | `encrypt` / `decrypt` | raw-key AEAD / CTR / XOR |
-| `lock` / `unlock` | password-protect files into `.elk` |
+| `lock` / `unlock` | encrypt files **and folders** to a password and/or public keys (`.elk`) |
+| `inspect` | show how an `.elk` file can be unlocked, no password needed |
+| `identity` | create or show your public-key identity |
 | `hmac` | keyed MACs |
 | `kdf` | Argon2id / PBKDF2, with `--verify <PHC>` to check a stored hash |
 | `password` | unbiased random passwords, with their entropy |

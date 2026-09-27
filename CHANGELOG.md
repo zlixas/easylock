@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **ELK2 file format**: a random file key held in key slots (a password and/or public keys), with an HMAC over the header.
+  See [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md).
+- **Public-key file encryption** with a post-quantum X25519 + ML-KEM-768 hybrid: `easylock identity`, `lock -r KEY`
+  (multiple recipients allowed), and `unlock` finds your identity automatically. The website has the same features plus a new
+  "Key pair" tool. Browser and CLI can open each other's files.
+- **Streaming, multi-core engine** (`container::stream`) with a read → encrypt → write pipeline. Memory use is constant
+  (1 GB → ~120 MB for a 500 MB file). Encryption is ~4× faster: 0.34 s instead of 1.41 s for 500 MB, excluding the final `fsync`.
+- **Folder encryption** with a hardened archive format that rejects path traversal and never overwrites or follows symlinks.
+- `lock` accepts several inputs, stdin/stdout pipes and `--shred`. The new `inspect` command shows how a file can be unlocked.
+  Outputs are atomic (written to a temp file, `fsync`ed, then renamed) and nothing is overwritten without `--force`.
+- Argon2 parameter limits when reading files, so a hostile header can't exhaust memory.
+- The desktop app uses the shared engine and can encrypt folders.
 - **Terminal UI** (`easylock tui`): nine interactive tools, live hashing and HMAC, clipboard copy, and in-app language switching.
 - **Spanish** in every front-end: CLI, TUI, website and desktop app. The CLI accepts `--lang en|tr|es`.
 - New CLI commands: `lock` / `unlock` (password-based `.elk` files), `hmac`, `kdf` (with `--verify`), `password`,
@@ -19,6 +31,8 @@ All notable changes to this project are documented here. The format follows
   CI workflow, and issue and PR templates. The README is available in EN, TR and ES.
 
 ### Changed
+- Writers now produce ELK2. ELK1 files still decrypt everywhere.
+- The CLI and desktop app get randomness from `getrandom` instead of `/dev/urandom`, in preparation for Windows builds.
 - The Argon2 output of the web app, server and desktop app now uses standard PHC Base64 instead of URL-safe Base64.
 - The desktop app's `.elk` streaming implementation has been checked against the core implementation.
 

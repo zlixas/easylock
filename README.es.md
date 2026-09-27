@@ -40,6 +40,9 @@ cargo install --git https://github.com/zlixas/easylock easylock-cli
 easylock --lang es tui                     # interfaz de terminal a pantalla completa
 easylock lock impuestos.pdf                # → impuestos.pdf.elk (pide una contraseña)
 easylock unlock impuestos.pdf.elk
+easylock lock ~/Fotos --shred              # carpeta entera → un .elk, originales borrados
+easylock identity                          # su par de claves (X25519 + ML-KEM-768)
+easylock lock informe.pdf -r elkpub1…      # cifrar para alguien sin contraseña compartida
 echo -n abc | easylock hash -a blake3
 easylock password -n 3 -l 24 --symbols
 easylock --lang es --help
@@ -62,7 +65,7 @@ Si su sistema tiene configurado `LANG=es_ES.UTF-8`, la interfaz se abre en espa�
 
 ## Las cuatro interfaces
 
-- **🌐 Sitio web:** 19 herramientas en 5 categorías. Incluye cifrado de archivos y mensajes, hash en vivo,
+- **🌐 Sitio web:** 20 herramientas en 5 categorías. Incluye cifrado de archivos y mensajes, hash en vivo,
   verificación de sumas, hash y verificación con Argon2, una demostración del intercambio X25519, un inspector de JWT, un
   analizador de fortaleza de contraseñas y generadores de UUID y PIN, entre otras. <kbd>Ctrl</kbd>+<kbd>K</kbd> abre la paleta de comandos,
   y el diseño se adapta a móviles.
