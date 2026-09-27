@@ -90,27 +90,110 @@ const SUBCOMMANDS: &[SubSpec] = &[
     (
         "lock",
         [
-            "Encrypt a file with a password (.elk — opens in the app and website too)",
-            "Bir dosyayı parolayla şifrele (.elk — uygulama ve sitede de açılır)",
-            "Cifrar un archivo con contraseña (.elk — también se abre en la app y la web)",
+            "Encrypt files or folders to a password and/or public keys (.elk)",
+            "Dosya veya klasörleri parolaya ve/veya açık anahtarlara şifrele (.elk)",
+            "Cifrar archivos o carpetas con contraseña y/o claves públicas (.elk)",
         ],
         &[
+            ("inputs", [
+                "Files or folders to encrypt (`-` = stdin)",
+                "Şifrelenecek dosya veya klasörler (`-` = stdin)",
+                "Archivos o carpetas a cifrar (`-` = stdin)",
+            ]),
+            ("output", [
+                "Output file (default: PATH.elk; `-` = stdout). Single input only",
+                "Çıktı dosyası (varsayılan: YOL.elk; `-` = stdout). Yalnızca tek girdi",
+                "Archivo de salida (predeterminado: RUTA.elk; `-` = stdout). Solo una entrada",
+            ]),
             ("cipher", ["aes-256-gcm or chacha20-poly1305", "aes-256-gcm veya chacha20-poly1305", "aes-256-gcm o chacha20-poly1305"]),
+            ("recipients", [
+                "Encrypt to a public key (elkpub1…) or a file of keys; repeatable",
+                "Bir açık anahtara (elkpub1…) veya anahtar dosyasına şifrele; tekrarlanabilir",
+                "Cifrar para una clave pública (elkpub1…) o un archivo de claves; repetible",
+            ]),
             ("password", [
                 "Password (prefer the prompt or EASYLOCK_PASSWORD)",
                 "Parola (istem veya EASYLOCK_PASSWORD tercih edin)",
                 "Contraseña (mejor el aviso o EASYLOCK_PASSWORD)",
             ]),
+            ("with_password", [
+                "With -r: also allow unlocking with a password",
+                "-r ile: parolayla açmaya da izin ver",
+                "Con -r: permitir también abrir con contraseña",
+            ]),
+            ("shred", [
+                "After encrypting, overwrite and delete the original",
+                "Şifreledikten sonra orijinalin üzerine yaz ve sil",
+                "Tras cifrar, sobrescribir y borrar el original",
+            ]),
+            ("force", ["Replace an existing output file", "Var olan çıktı dosyasını değiştir", "Reemplazar un archivo de salida existente"]),
+            ("quiet", ["No progress or status output", "İlerleme veya durum çıktısı yok", "Sin progreso ni mensajes de estado"]),
         ],
     ),
     (
         "unlock",
-        ["Decrypt a .elk file", "Bir .elk dosyasının şifresini çöz", "Descifrar un archivo .elk"],
-        &[("password", [
-            "Password (prefer the prompt or EASYLOCK_PASSWORD)",
-            "Parola (istem veya EASYLOCK_PASSWORD tercih edin)",
-            "Contraseña (mejor el aviso o EASYLOCK_PASSWORD)",
-        ])],
+        ["Decrypt .elk files and folders", ".elk dosya ve klasörlerini çöz", "Descifrar archivos y carpetas .elk"],
+        &[
+            ("inputs", [".elk files to decrypt (`-` = stdin)", "Çözülecek .elk dosyaları (`-` = stdin)", "Archivos .elk a descifrar (`-` = stdin)"]),
+            ("output", [
+                "Output file or folder (default: FILE without .elk; `-` = stdout)",
+                "Çıktı dosyası veya klasörü (varsayılan: .elk olmadan DOSYA; `-` = stdout)",
+                "Archivo o carpeta de salida (predeterminado: ARCHIVO sin .elk; `-` = stdout)",
+            ]),
+            ("password", [
+                "Password (prefer the prompt or EASYLOCK_PASSWORD)",
+                "Parola (istem veya EASYLOCK_PASSWORD tercih edin)",
+                "Contraseña (mejor el aviso o EASYLOCK_PASSWORD)",
+            ]),
+            ("identity", [
+                "Identity file(s) for files encrypted to a public key; repeatable",
+                "Açık anahtara şifrelenmiş dosyalar için kimlik dosyası; tekrarlanabilir",
+                "Archivo(s) de identidad para archivos cifrados con clave pública; repetible",
+            ]),
+            ("list", ["List the contents instead of extracting", "Çıkarmak yerine içeriği listele", "Listar el contenido en lugar de extraer"]),
+            ("force", ["Replace an existing output file", "Var olan çıktı dosyasını değiştir", "Reemplazar un archivo de salida existente"]),
+            ("quiet", ["No progress or status output", "İlerleme veya durum çıktısı yok", "Sin progreso ni mensajes de estado"]),
+        ],
+    ),
+    (
+        "inspect",
+        [
+            "Show what an .elk file contains and how it can be unlocked",
+            "Bir .elk dosyasının ne içerdiğini ve nasıl açılabileceğini göster",
+            "Mostrar qué contiene un archivo .elk y cómo se puede abrir",
+        ],
+        &[("inputs", [".elk files (no password needed)", ".elk dosyaları (parola gerekmez)", "Archivos .elk (no requiere contraseña)"])],
+    ),
+    (
+        "identity",
+        [
+            "Create (or show) your public-key identity",
+            "Açık anahtar kimliğinizi oluşturun (veya gösterin)",
+            "Crear (o mostrar) su identidad de clave pública",
+        ],
+        &[
+            ("output", [
+                "Where to write it (default: ~/.config/easylock/identity.key)",
+                "Nereye yazılacağı (varsayılan: ~/.config/easylock/identity.key)",
+                "Dónde guardarla (predeterminado: ~/.config/easylock/identity.key)",
+            ]),
+            ("show", [
+                "Print the public key of an existing identity",
+                "Var olan kimliğin açık anahtarını yazdır",
+                "Mostrar la clave pública de una identidad existente",
+            ]),
+            ("identity", ["Identity file for --show", "--show için kimlik dosyası", "Archivo de identidad para --show"]),
+            ("plain", [
+                "Store the secret key without password protection",
+                "Gizli anahtarı parola koruması olmadan sakla",
+                "Guardar la clave secreta sin protección por contraseña",
+            ]),
+            ("force", [
+                "Replace an existing identity (the old key is lost)",
+                "Var olan kimliği değiştir (eski anahtar kaybolur)",
+                "Reemplazar una identidad existente (se pierde la anterior)",
+            ]),
+        ],
     ),
     (
         "hmac",
