@@ -27,6 +27,19 @@ impl PublicKey {
 }
 
 impl StaticSecret {
+    /// X25519 that rejects small-order peer points (all-zero shared secret) with
+    /// [`crate::Error::InvalidParameter`].
+    pub fn diffie_hellman_checked(&self, peer: &PublicKey) -> crate::Result<SharedSecret> {
+        let ss = self.diffie_hellman(peer);
+        if ss.was_contributory() {
+            Ok(ss)
+        } else {
+            Err(crate::Error::InvalidParameter {
+                what: "x25519 peer key (small-order point)",
+            })
+        }
+    }
+
     #[must_use]
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(Secret::from_bytes(bytes))
@@ -42,6 +55,9 @@ impl StaticSecret {
         PublicKey(x25519_base(self.0.expose()))
     }
 
+    /// Raw X25519 (RFC 7748). A small-order `peer` yields the all-zero secret;
+    /// protocols should use [`StaticSecret::diffie_hellman_checked`] or check
+    /// [`SharedSecret::was_contributory`].
     #[must_use]
     pub fn diffie_hellman(&self, peer: &PublicKey) -> SharedSecret {
         SharedSecret(Secret::from_bytes(x25519(self.0.expose(), &peer.0)))

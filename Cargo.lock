@@ -1060,6 +1060,7 @@ name = "easylock-core"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "serde_json",
 ]
 
 [[package]]
@@ -1081,6 +1082,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "easylock-core",
+ "getrandom 0.2.17",
  "http-body-util",
  "serde",
  "serde_json",

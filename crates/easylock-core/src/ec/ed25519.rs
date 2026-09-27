@@ -318,15 +318,51 @@ fn sign(seed: &[u8; 32], public: &[u8; 32], msg: &[u8]) -> [u8; 64] {
     sig
 }
 
+/// `true` if `p` has small order, i.e. `[8]P` is the identity (the point lies in
+/// the torsion subgroup of order 1, 2, 4 or 8).
+fn is_small_order(p: &Point) -> bool {
+    let mut q = *p;
+    for _ in 0..3 {
+        let c = q;
+        point_add(&mut q, &c);
+    }
+    // Identity in extended coordinates: X = 0 and Y = Z.
+    let identity = {
+        let mut id = [0u8; 32];
+        id[0] = 1;
+        id
+    };
+    point_pack(&q) == identity
+}
+
+/// `true` if `enc` is the canonical encoding of its y-coordinate (y < p).
+fn is_canonical_encoding(enc: &[u8; 32]) -> bool {
+    let mut y = *enc;
+    y[31] &= 0x7f;
+    to_bytes(unpack25519(&y)) == y
+}
+
+/// Strict Ed25519 verification (the semantics of `ed25519-dalek`'s `verify_strict`):
+/// on top of RFC 8032, reject non-canonical `S` and `A` encodings and small-order
+/// `A` or `R`. Without these checks the identity public key `01 00…00` "verifies"
+/// the forged signature `R = B, S = 1` for every message.
 fn verify(public: &[u8; 32], msg: &[u8], sig: &[u8; 64]) -> bool {
     let mut s = [0u8; 32];
     s.copy_from_slice(&sig[32..]);
-    if !scalar_is_canonical(&s) {
+    if !scalar_is_canonical(&s) || !is_canonical_encoding(public) {
         return false;
     }
     let Some(q) = point_unpack_neg(public) else {
         return false;
     };
+    let mut r_enc = [0u8; 32];
+    r_enc.copy_from_slice(&sig[..32]);
+    let Some(r_point) = point_unpack_neg(&r_enc) else {
+        return false;
+    };
+    if is_small_order(&q) || is_small_order(&r_point) {
+        return false;
+    }
 
     let mut hh = Sha512::init();
     hh.update(&sig[..32]);
@@ -415,5 +451,55 @@ mod tests {
         let other = SigningKey::from_seed([2u8; 32]).verifying_key();
         let sig = sk.sign(b"hi");
         assert!(!other.verify(b"hi", &sig));
+    }
+
+    /// Regression test for the small-order public key forgery: the identity key and
+    /// every other small-order point must never verify anything.
+    #[test]
+    fn small_order_keys_and_r_are_rejected() {
+        let forged = {
+            let mut sig = [0u8; 64];
+            sig[..32].copy_from_slice(&h(
+                "5866666666666666666666666666666666666666666666666666666666666666",
+            ));
+            sig[32] = 1; // S = 1
+            Signature::from_bytes(sig)
+        };
+        // The 8 small-order points (canonical encodings), incl. the identity.
+        let small_order = [
+            "0100000000000000000000000000000000000000000000000000000000000000",
+            "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+            "0000000000000000000000000000000000000000000000000000000000000080",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+            "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+            "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+            "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+        ];
+        for pk in small_order {
+            let vk = VerifyingKey::from_bytes(h(pk).try_into().unwrap());
+            for msg in [&b""[..], b"any message", b"pay mallory 1000"] {
+                assert!(
+                    !vk.verify(msg, &forged),
+                    "small-order key {pk} accepted a forgery"
+                );
+            }
+        }
+        // A real key still works, but not with a small-order R.
+        let sk = SigningKey::from_seed([9u8; 32]);
+        let vk = sk.verifying_key();
+        let good = sk.sign(b"hello");
+        assert!(vk.verify(b"hello", &good));
+        let mut bad_r = good.to_bytes();
+        bad_r[..32].copy_from_slice(&h(small_order[0]));
+        assert!(!vk.verify(b"hello", &Signature::from_bytes(bad_r)));
+    }
+
+    #[test]
+    fn non_canonical_public_key_encoding_rejected() {
+        // y = p + 1 ≡ 1 (the identity, encoded non-canonically) must not decode.
+        let mut enc = h("eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f");
+        enc[31] &= 0x7f;
+        assert!(!is_canonical_encoding(&enc.try_into().unwrap()));
     }
 }

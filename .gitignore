@@ -13,3 +13,19 @@ crates/easylock-web/.vite/
 
 # easylock-gui (Tauri generated)
 crates/easylock-gui/gen/
+
+# Never commit key material or encrypted test output
+*.pem
+*.key
+*.p12
+*.pfx
+*.elk
+*.elkvault/
+.env
+.env.*
+
+# cargo-fuzz
+fuzz/target/
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
