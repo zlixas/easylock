@@ -4,12 +4,15 @@ import { wasm } from "./wasm.js";
 
 // --- byte / string helpers ------------------------------------------
 
+export const enc = new TextEncoder();
+export const dec = new TextDecoder();
+
 export function randomHex(bytes) {
   return bytesToHex(wasm.random_bytes(bytes));
 }
 export function hexToBytes(hex) {
-  const h = hex.trim().replace(/\s+/g, "");
-  if (h.length % 2) throw new Error("odd-length hex");
+  const h = hex.trim().replace(/\s+/g, "").replace(/^0x/i, "");
+  if (h.length % 2 || /[^0-9a-f]/i.test(h)) throw new Error("invalid hex");
   const out = new Uint8Array(h.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
   return out;
@@ -17,104 +20,66 @@ export function hexToBytes(hex) {
 export function bytesToHex(b) {
   return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
 }
-export function toB64(str) {
-  return btoa(unescape(encodeURIComponent(str)));
+export function bytesToB64(b) {
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
 }
-export function fromB64(b64) {
-  return decodeURIComponent(escape(atob(b64)));
-}
-function b64ToBytes(b64) {
-  const bin = atob(b64.trim());
+export function b64ToBytes(b64) {
+  const clean = b64.trim().replace(/-/g, "+").replace(/_/g, "/").replace(/\s+/g, "");
+  const bin = atob(clean + "===".slice((clean.length + 3) % 4));
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
-function bytesToB64(b) {
-  let s = "";
-  for (const x of b) s += String.fromCharCode(x);
-  return btoa(s);
+export function bytesToB64url(b) {
+  return bytesToB64(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-const enc = new TextEncoder();
 
-// --- API (same shape the tool views expect) ------------------------
+/** Let the browser paint (status text, spinners) before a slow wasm call. */
+export const yieldUI = () => new Promise((r) => setTimeout(r, 30));
+
+// --- API --------------------------------------------------------------
 
 export const api = {
-  async health() {
-    return {
-      version: wasm.version(),
-      aes_backend: "wasm (portable-ct)",
-      ghash_backend: "wasm (portable-ct)",
-      build: wasm.build_info(),
-    };
-  },
+  version: () => wasm.version(),
+  buildInfo: () => wasm.build_info(),
 
-  hash(algo, dataB64, isHex = false) {
-    const bytes = isHex ? hexToBytes(dataB64) : b64ToBytes(dataB64);
-    return wasm.hash(algo, bytes);
-  },
+  hash: (algo, bytes) => wasm.hash(algo, bytes),
+  hashAll: (bytes) => wasm.hash_all(bytes),
+  hmac: (algo, key, data) => wasm.hmac(algo, key, data),
+  hkdf: (ikm, salt, info, len) => bytesToHex(wasm.hkdf_sha256(ikm, salt, info, len)),
 
-  aeadSeal(alg, keyHex, nonceHex, aadHex, plaintextB64) {
-    const ct = wasm.aead_seal(
-      alg, hexToBytes(keyHex), hexToBytes(nonceHex),
-      aadHex ? hexToBytes(aadHex) : new Uint8Array(), b64ToBytes(plaintextB64),
-    );
-    return bytesToB64(ct);
-  },
-  aeadOpen(alg, keyHex, nonceHex, aadHex, ciphertextB64) {
-    const pt = wasm.aead_open(
-      alg, hexToBytes(keyHex), hexToBytes(nonceHex),
-      aadHex ? hexToBytes(aadHex) : new Uint8Array(), b64ToBytes(ciphertextB64),
-    );
-    return bytesToB64(pt);
-  },
+  aeadSeal: (alg, key, nonce, aad, pt) => wasm.aead_seal(alg, key, nonce, aad, pt),
+  aeadOpen: (alg, key, nonce, aad, ct) => wasm.aead_open(alg, key, nonce, aad, ct),
 
-  argon2(password, opts) {
-    const salt = opts.salt_hex ? hexToBytes(opts.salt_hex) : wasm.random_bytes(16);
-    const m = opts.m_cost ?? 65536, tt = opts.t_cost ?? 3, p = opts.parallelism ?? 4;
-    const tag = wasm.argon2id(enc.encode(password), salt, m, tt, p, 32);
-    const b64u = (b) => btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-    return {
-      tag_hex: bytesToHex(tag),
-      salt_hex: bytesToHex(salt),
-      phc: `$argon2id$v=19$m=${m},t=${tt},p=${p}$${b64u(salt)}$${b64u(tag)}`,
-    };
-  },
-  pbkdf2(password, saltHex, iterations, outLen) {
-    return bytesToHex(wasm.pbkdf2_sha256(enc.encode(password), hexToBytes(saltHex), iterations, outLen));
-  },
+  argon2Phc: (password, salt, m, t, p) => wasm.argon2id_phc(enc.encode(password), salt, m, t, p),
+  argon2Verify: (password, phc) => wasm.argon2_verify(enc.encode(password), phc.trim()),
+  pbkdf2: (password, salt, iterations, outLen) =>
+    bytesToHex(wasm.pbkdf2_sha256(enc.encode(password), salt, iterations, outLen)),
 
-  encode(input, steps, decode) {
-    return wasm.encode_pipeline(input, steps, decode);
-  },
+  encode: (input, steps, decode) => wasm.encode_pipeline(input, steps, decode),
 
   password(opts) {
-    const p = wasm.gen_password(
-      opts.length ?? 20,
-      opts.lower ?? true, opts.upper ?? true, opts.digits ?? true, opts.symbols ?? false,
-    );
-    const pool =
-      (opts.lower ?? true ? 24 : 0) + (opts.upper ?? true ? 23 : 0) +
-      (opts.digits ?? true ? 8 : 0) + (opts.symbols ? 12 : 0);
-    return { password: p, bits_of_entropy: Math.round(p.length * Math.log2(pool || 2) * 10) / 10 };
+    const p = wasm.gen_password(opts.length, opts.lower, opts.upper, opts.digits, opts.symbols);
+    const pool = (opts.lower ? 24 : 0) + (opts.upper ? 23 : 0) + (opts.digits ? 8 : 0) + (opts.symbols ? 12 : 0);
+    return { password: p, bits: Math.round(p.length * Math.log2(pool || 2) * 10) / 10 };
   },
 
-  keygen(kind) {
-    return wasm.keygen(kind);
-  },
-  mlkemEncaps(param, ekHex) {
-    return wasm.mlkem_encaps(param, ekHex);
-  },
-  mlkemDecaps(param, dkHex, ctHex) {
-    return wasm.mlkem_decaps(param, dkHex, ctHex);
-  },
+  keygen: (kind) => wasm.keygen(kind),
+  mlkemEncaps: (param, ekHex) => wasm.mlkem_encaps(param, ekHex),
+  mlkemDecaps: (param, dkHex, ctHex) => wasm.mlkem_decaps(param, dkHex, ctHex),
 
-  x25519(scalarHex, pointHex) {
-    return wasm.x25519(scalarHex, pointHex);
-  },
-  edSign(seedHex, messageB64) {
-    return wasm.ed25519_sign(seedHex, b64ToBytes(messageB64));
-  },
-  edVerify(publicHex, messageB64, sigHex) {
-    return wasm.ed25519_verify(publicHex, b64ToBytes(messageB64), sigHex);
-  },
+  x25519: (scalarHex, pointHex) => wasm.x25519(scalarHex, pointHex),
+  x25519Public: (secretHex) => wasm.x25519_public(secretHex),
+  edSign: (seedHex, msg) => wasm.ed25519_sign(seedHex, msg),
+  edVerify: (publicHex, msg, sigHex) => wasm.ed25519_verify(publicHex, msg, sigHex),
+
+  elkSealFile: (data, pw, cipher) => wasm.elk_seal_file(data, enc.encode(pw), cipher),
+  elkOpenFile: (data, pw) => wasm.elk_open_file(data, enc.encode(pw)),
+  elkInspect: (data) => wasm.elk_inspect(data),
+  elkSealToken: (text, pw, cipher) => wasm.elk_seal_token(text, enc.encode(pw), cipher),
+  elkOpenToken: (token, pw) => wasm.elk_open_token(token.trim(), enc.encode(pw)),
+
+  random: (n) => wasm.random_bytes(n),
 };
