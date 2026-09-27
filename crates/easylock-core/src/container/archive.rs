@@ -148,7 +148,7 @@ fn read_u<const N: usize>(r: &mut impl Read) -> io::Result<[u8; N]> {
 }
 
 /// Validate an archive path and turn it into a safe relative `PathBuf`.
-fn safe_relative(path: &str) -> io::Result<PathBuf> {
+pub(crate) fn safe_relative(path: &str) -> io::Result<PathBuf> {
     let bad = || invalid("unsafe path in archive");
     if path.is_empty() || path.len() > MAX_PATH || path.contains(['\\', '\0', ':']) {
         return Err(bad());

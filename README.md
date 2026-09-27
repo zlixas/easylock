@@ -134,6 +134,23 @@ The clipboard is wiped when you close the tab or after 5 minutes idle.
 
 The byte-level format is documented in [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md).
 
+### 🔐 Encrypted vault
+
+A vault is a folder where files **stay encrypted**. File names, sizes and dates are hidden in an encrypted index,
+and plaintext is never written into the vault.
+
+```sh
+easylock vault init ~/Private.vault                 # password and/or -r public keys
+easylock vault add  ~/Private.vault taxes/ id.pdf --shred
+easylock vault ls   ~/Private.vault
+easylock vault cat  ~/Private.vault taxes/2025.pdf | open -f
+easylock vault get  ~/Private.vault taxes -o ~/Desktop
+easylock vault rm   ~/Private.vault id.pdf
+easylock vault passwd ~/Private.vault -r elkpub1…   # re-key without re-encrypting any files
+```
+
+Vaults sync safely through Dropbox, iCloud or Git because every file is a separate, randomly named object.
+
 ### ⌨️ Terminal UI
 
 ```sh
@@ -155,6 +172,7 @@ password-based text encryption, HMAC, Ed25519 sign/verify, an X25519 exchange de
 | `lock` / `unlock` | encrypt files **and folders** to a password and/or public keys (`.elk`) |
 | `inspect` | show how an `.elk` file can be unlocked, no password needed |
 | `identity` | create or show your public-key identity |
+| `vault` | `init` · `add` · `ls` · `get` · `cat` · `rm` · `passwd` · `info` for an encrypted vault |
 | `hmac` | keyed MACs |
 | `kdf` | Argon2id / PBKDF2, with `--verify <PHC>` to check a stored hash |
 | `password` | unbiased random passwords, with their entropy |

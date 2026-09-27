@@ -119,12 +119,12 @@ fn stream_err(path: &Path, e: &io::Error) -> CliError {
     }
 }
 
-fn password_from_env(flag: Option<&String>) -> Option<String> {
+pub(crate) fn password_from_env(flag: Option<&String>) -> Option<String> {
     flag.cloned()
         .or_else(|| std::env::var("EASYLOCK_PASSWORD").ok())
 }
 
-fn ask_password(lang: Lang, confirm: bool) -> Result<String, CliError> {
+pub(crate) fn ask_password(lang: Lang, confirm: bool) -> Result<String, CliError> {
     let first = prompt_secret(lang.pick(["Password", "Parola", "Contraseña"]))?;
     if confirm {
         let again = prompt_secret(lang.pick([
@@ -143,7 +143,7 @@ fn ask_password(lang: Lang, confirm: bool) -> Result<String, CliError> {
 }
 
 /// Parse `-r` values: `elkpub1…` keys, or files containing them (e.g. an identity file).
-fn load_recipients(specs: &[String]) -> Result<Vec<Recipient>, CliError> {
+pub(crate) fn load_recipients(specs: &[String]) -> Result<Vec<Recipient>, CliError> {
     let mut out = Vec::new();
     for spec in specs {
         let bad = || CliError::new(Msg::BadRecipient(spec.clone()));
@@ -212,11 +212,11 @@ fn dir_size(p: &Path) -> u64 {
 }
 
 /// Overwrite a file (or every file in a folder) with zeros, then delete it.
-fn shred(p: &Path) -> io::Result<()> {
+pub(crate) fn shred_path(p: &Path) -> io::Result<()> {
     let meta = fs::symlink_metadata(p)?;
     if meta.is_dir() {
         for e in fs::read_dir(p)? {
-            shred(&e?.path())?;
+            shred_path(&e?.path())?;
         }
         return fs::remove_dir(p);
     }
@@ -435,7 +435,7 @@ fn lock_one(
                 Msg::ShredSkipped(input.display().to_string()).text(lang)
             );
         } else {
-            shred(input).map_err(|e| write_err(input, &e))?;
+            shred_path(input).map_err(|e| write_err(input, &e))?;
             status(
                 args.quiet,
                 &Msg::Shredded(input.display().to_string()).text(lang),

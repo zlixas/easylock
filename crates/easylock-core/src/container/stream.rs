@@ -168,6 +168,17 @@ pub struct Encryptor<W: Write> {
 }
 
 impl<W: Write> Encryptor<W> {
+    /// Encrypt directly under `key` (no header is written). Each `(key, base_nonce)`
+    /// pair must be used for at most one stream; the last 4 nonce bytes must be zero.
+    pub fn with_key(
+        inner: W,
+        cipher: Cipher,
+        key: &[u8; 32],
+        base_nonce: [u8; 12],
+    ) -> Result<Self> {
+        Self::new(inner, cipher, key, base_nonce)
+    }
+
     fn new(inner: W, cipher: Cipher, key: &[u8; 32], base_nonce: [u8; 12]) -> Result<Self> {
         let threads = worker_count();
         Ok(Encryptor {
@@ -339,6 +350,16 @@ pub struct Decryptor<R: Read> {
 }
 
 impl<R: Read> Decryptor<R> {
+    /// Decrypt a headerless chunk stream produced by [`Encryptor::with_key`].
+    pub fn with_key(
+        inner: R,
+        cipher: Cipher,
+        key: &[u8; 32],
+        base_nonce: [u8; 12],
+    ) -> Result<Self> {
+        Self::new(inner, cipher, key, base_nonce)
+    }
+
     fn new(inner: R, cipher: Cipher, key: &[u8; 32], base_nonce: [u8; 12]) -> Result<Self> {
         let threads = worker_count();
         Ok(Decryptor {

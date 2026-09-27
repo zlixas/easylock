@@ -63,6 +63,19 @@ easylock --lang tr --help
 | Kuantum sonrası | ML-KEM-512/768/1024 (FIPS 203) |
 | Kapsayıcı | `.elk` dosyaları ve `elk1.` metin belirteçleri ([biçim](docs/FILE_FORMAT.md)) |
 
+
+## Şifreli kasa
+
+Kasa, dosyaların **şifreli kaldığı** bir klasördür. Dosya adları, boyutları ve tarihleri de şifreli bir dizinde saklanır.
+
+```sh
+easylock vault init ~/Gizli.vault
+easylock vault add  ~/Gizli.vault vergiler/ kimlik.pdf --shred
+easylock vault ls   ~/Gizli.vault
+easylock vault get  ~/Gizli.vault vergiler -o ~/Masaüstü
+easylock vault passwd ~/Gizli.vault -r elkpub1…     # dosyaları yeniden şifrelemeden anahtar değiştir
+```
+
 ## Dört arayüz
 
 - **🌐 Web sitesi:** 5 kategoride 20 araç. Dosya ve mesaj şifreleme, canlı özet, sağlama doğrulama,

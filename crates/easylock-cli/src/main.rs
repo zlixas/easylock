@@ -1,6 +1,6 @@
 //! `easylock` — command-line interface and terminal UI.
 //!
-//! Subcommands: `lock`, `unlock`, `inspect`, `identity`, `hash`, `encode`, `decode`, `encrypt`, `decrypt`, `hmac`, `kdf`,
+//! Subcommands: `lock`, `unlock`, `inspect`, `identity`, `vault`, `hash`, `encode`, `decode`, `encrypt`, `decrypt`, `hmac`, `kdf`,
 //! `password`, `keygen`, `sign`, `verify`, `info`, and `tui` (full-screen UI).
 //! Help, messages and the TUI are available in English, Turkish and Spanish,
 //! chosen with `--lang en|tr|es` or the system locale.
@@ -49,6 +49,8 @@ enum Command {
     Inspect(commands::lock::InspectArgs),
     /// Create (or show) your public-key identity.
     Identity(commands::identity::Args),
+    /// Encrypted vault: a folder where files stay encrypted.
+    Vault(commands::vault::Args),
     /// Keyed message authentication code.
     Hmac(commands::hmac::Args),
     /// Password hashing / key derivation (Argon2id, PBKDF2).
@@ -79,7 +81,11 @@ fn main() -> ExitCode {
         println!("easylock {}", env!("CARGO_PKG_VERSION"));
         return ExitCode::SUCCESS;
     }
-    if help::wants_help(&matches) || matches.subcommand().is_none() {
+    // A command group (e.g. `easylock vault`) without its subcommand shows its help.
+    let group_without_sub = matches
+        .subcommand()
+        .is_some_and(|(_, m)| m.subcommand().is_none() && help::is_group(&matches));
+    if help::wants_help(&matches) || matches.subcommand().is_none() || group_without_sub {
         let mut cmd = help::localized_command(Cli::command(), lang);
         print!("{}", help::render_localized_help(&mut cmd, &matches, lang));
         return ExitCode::SUCCESS;
@@ -103,6 +109,7 @@ fn main() -> ExitCode {
         Command::Unlock(a) => commands::lock::run_unlock(&a, lang),
         Command::Inspect(a) => commands::lock::run_inspect(&a, lang),
         Command::Identity(a) => commands::identity::run(&a, lang),
+        Command::Vault(a) => commands::vault::run(&a, lang),
         Command::Hmac(a) => commands::hmac::run(&a, lang),
         Command::Kdf(a) => commands::kdf::run(&a, lang),
         Command::Password(a) => commands::password::run(&a, lang),

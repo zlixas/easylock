@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Encrypted vaults** (`easylock vault init/add/ls/get/cat/rm/passwd/info`): files stay encrypted at rest, names and
+  sizes live in an encrypted index, updates are atomic with a process lock, `vault passwd` re-keys instantly, and
+  adding files can `--shred` the originals.
 - **ELK2 file format**: a random file key held in key slots (a password and/or public keys), with an HMAC over the header.
   See [docs/FILE_FORMAT.md](docs/FILE_FORMAT.md).
 - **Public-key file encryption** with a post-quantum X25519 + ML-KEM-768 hybrid: `easylock identity`, `lock -r KEY`

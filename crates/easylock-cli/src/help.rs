@@ -30,6 +30,191 @@ const OUTPUT: L3 = [
     "Archivo de salida (omitido o `-` = stdout)",
 ];
 
+const OPEN_ARGS: &[(&str, L3)] = &[
+    (
+        "vault",
+        ["Vault directory", "Kasa klasörü", "Directorio del almacén"],
+    ),
+    (
+        "password",
+        [
+            "Password (prefer the prompt or EASYLOCK_PASSWORD)",
+            "Parola (istem veya EASYLOCK_PASSWORD tercih edin)",
+            "Contraseña (mejor el aviso o EASYLOCK_PASSWORD)",
+        ],
+    ),
+    (
+        "identity",
+        [
+            "Identity file(s) for vaults locked to a public key",
+            "Açık anahtara kilitli kasalar için kimlik dosyası",
+            "Archivo(s) de identidad para almacenes con clave pública",
+        ],
+    ),
+    (
+        "cipher",
+        [
+            "aes-256-gcm or chacha20-poly1305",
+            "aes-256-gcm veya chacha20-poly1305",
+            "aes-256-gcm o chacha20-poly1305",
+        ],
+    ),
+    (
+        "recipients",
+        [
+            "Public key(s) that may open the vault (elkpub1… or a file)",
+            "Kasayı açabilecek açık anahtar(lar) (elkpub1… veya dosya)",
+            "Clave(s) pública(s) que pueden abrir el almacén (elkpub1… o archivo)",
+        ],
+    ),
+    (
+        "with_password",
+        [
+            "With -r: also allow a password",
+            "-r ile: parolaya da izin ver",
+            "Con -r: permitir también contraseña",
+        ],
+    ),
+    (
+        "paths",
+        [
+            "Files or folders to add",
+            "Eklenecek dosya veya klasörler",
+            "Archivos o carpetas a añadir",
+        ],
+    ),
+    (
+        "prefix",
+        [
+            "Folder inside the vault",
+            "Kasa içindeki klasör",
+            "Carpeta dentro del almacén",
+        ],
+    ),
+    (
+        "shred",
+        [
+            "After adding, overwrite and delete the originals",
+            "Ekledikten sonra orijinallerin üzerine yaz ve sil",
+            "Tras añadir, sobrescribir y borrar los originales",
+        ],
+    ),
+    (
+        "quiet",
+        ["No progress output", "İlerleme çıktısı yok", "Sin progreso"],
+    ),
+    (
+        "names",
+        [
+            "Files or folders inside the vault",
+            "Kasa içindeki dosya veya klasörler",
+            "Archivos o carpetas del almacén",
+        ],
+    ),
+    (
+        "name",
+        [
+            "File inside the vault",
+            "Kasa içindeki dosya",
+            "Archivo del almacén",
+        ],
+    ),
+    (
+        "output",
+        [
+            "Destination folder (default: current)",
+            "Hedef klasör (varsayılan: geçerli)",
+            "Carpeta de destino (predeterminada: actual)",
+        ],
+    ),
+    (
+        "force",
+        [
+            "Replace existing files",
+            "Var olan dosyaları değiştir",
+            "Reemplazar archivos existentes",
+        ],
+    ),
+];
+
+const VAULT_SUBS: &[(&str, L3)] = &[
+    (
+        "init",
+        [
+            "Create a new vault",
+            "Yeni bir kasa oluştur",
+            "Crear un almacén nuevo",
+        ],
+    ),
+    (
+        "add",
+        [
+            "Encrypt files or folders into the vault",
+            "Dosya veya klasörleri kasaya şifreleyerek ekle",
+            "Cifrar archivos o carpetas en el almacén",
+        ],
+    ),
+    (
+        "ls",
+        [
+            "List what the vault contains",
+            "Kasanın içeriğini listele",
+            "Listar el contenido del almacén",
+        ],
+    ),
+    (
+        "get",
+        [
+            "Decrypt files out of the vault",
+            "Dosyaları kasadan çözerek çıkar",
+            "Descifrar archivos del almacén",
+        ],
+    ),
+    (
+        "cat",
+        [
+            "Print a file from the vault to stdout",
+            "Kasadaki bir dosyayı stdout'a yazdır",
+            "Mostrar un archivo del almacén en stdout",
+        ],
+    ),
+    (
+        "rm",
+        [
+            "Remove files or folders from the vault",
+            "Kasadan dosya veya klasör sil",
+            "Eliminar archivos o carpetas del almacén",
+        ],
+    ),
+    (
+        "passwd",
+        [
+            "Change the password / public keys that open the vault",
+            "Kasayı açan parolayı / açık anahtarları değiştir",
+            "Cambiar la contraseña / claves públicas del almacén",
+        ],
+    ),
+    (
+        "info",
+        [
+            "Show how the vault can be unlocked",
+            "Kasanın nasıl açılabileceğini göster",
+            "Mostrar cómo se abre el almacén",
+        ],
+    ),
+];
+
+const VAULT_ABOUT: L3 = [
+    "Encrypted vault: a folder where files stay encrypted (names hidden too)",
+    "Şifreli kasa: dosyaların şifreli kaldığı klasör (adlar da gizli)",
+    "Almacén cifrado: una carpeta donde los archivos siguen cifrados (nombres ocultos)",
+];
+
+/// Command groups whose bare invocation should print help.
+pub fn is_group(m: &ArgMatches) -> bool {
+    matches!(m.subcommand_name(), Some("vault"))
+}
+
 /// `(subcommand, about, [(arg id, help)])`.
 type SubSpec = (&'static str, L3, &'static [(&'static str, L3)]);
 
@@ -426,6 +611,13 @@ pub fn localized_command(base: Command, lang: Lang) -> Command {
     for (name, about, args) in SUBCOMMANDS {
         cmd = cmd.mut_subcommand(*name, |sc| localize_sub(sc, lang, *about, args));
     }
+    cmd = cmd.mut_subcommand("vault", |v| {
+        let mut v = localize_sub(v, lang, VAULT_ABOUT, &[]).subcommand_required(false);
+        for (name, about) in VAULT_SUBS {
+            v = v.mut_subcommand(*name, |sc| localize_sub(sc, lang, *about, OPEN_ARGS));
+        }
+        v
+    });
     cmd = cmd.mut_subcommand("encrypt", |sc| {
         localize_sub(
             sc,
