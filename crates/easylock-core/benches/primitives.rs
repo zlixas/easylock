@@ -8,9 +8,9 @@ use easylock_core::aead::{Aead, Aes256Gcm, ChaCha20Poly1305};
 use easylock_core::cipher::aes::Aes256;
 use easylock_core::ec::{x25519_base, SigningKey};
 use easylock_core::hash::Hash;
-use easylock_core::hash::{Keccak256, Sha256, Sha512};
+use easylock_core::hash::{Blake3, Keccak256, Sha256, Sha3_256, Sha512};
 
-const SIZES: [usize; 3] = [64, 1024, 65536];
+const SIZES: [usize; 3] = [64, 1024, 262_144];
 
 fn bench_hashes(c: &mut Criterion) {
     let mut group = c.benchmark_group("hash");
@@ -31,12 +31,72 @@ fn bench_hashes(c: &mut Criterion) {
                 black_box(h.finalize_vec())
             });
         });
+        group.bench_with_input(BenchmarkId::new("blake3", size), &data, |b, d| {
+            b.iter(|| {
+                let mut h = Blake3::init();
+                h.update(black_box(d));
+                black_box(h.finalize_vec())
+            });
+        });
+        group.bench_with_input(BenchmarkId::new("sha3-256", size), &data, |b, d| {
+            b.iter(|| {
+                let mut h = Sha3_256::init();
+                h.update(black_box(d));
+                black_box(h.finalize_vec())
+            });
+        });
         group.bench_with_input(BenchmarkId::new("keccak256", size), &data, |b, d| {
             b.iter(|| {
                 let mut h = Keccak256::init();
                 h.update(black_box(d));
                 black_box(h.finalize_vec())
             });
+        });
+    }
+    group.finish();
+}
+
+fn bench_parts(c: &mut Criterion) {
+    use easylock_core::aead::chacha20::ChaCha20;
+    use easylock_core::mac::Poly1305;
+    let mut group = c.benchmark_group("parts");
+    let mut data = vec![0u8; 262_144];
+    group.throughput(Throughput::Bytes(data.len() as u64));
+    group.bench_function("chacha20/262144", |b| {
+        b.iter(|| ChaCha20::new(&[1; 32], &[2; 12], 1).apply(black_box(&mut data)));
+    });
+    group.bench_function("poly1305/262144", |b| {
+        b.iter(|| black_box(Poly1305::mac(&[3; 32], black_box(&data))));
+    });
+    group.finish();
+}
+
+fn bench_argon2(c: &mut Criterion) {
+    use easylock_core::kdf::argon2::{hash, Params};
+    let mut group = c.benchmark_group("argon2id");
+    group.sample_size(10);
+    for (name, p) in [
+        (
+            "19MiB-t2-p1",
+            Params {
+                m_cost: 19 * 1024,
+                t_cost: 2,
+                parallelism: 1,
+                out_len: 32,
+            },
+        ),
+        (
+            "64MiB-t3-p4",
+            Params {
+                m_cost: 64 * 1024,
+                t_cost: 3,
+                parallelism: 4,
+                out_len: 32,
+            },
+        ),
+    ] {
+        group.bench_function(name, |b| {
+            b.iter(|| black_box(hash(b"password", b"somesaltsomesalt", p).unwrap()));
         });
     }
     group.finish();
@@ -93,6 +153,8 @@ fn bench_curve25519(c: &mut Criterion) {
 
 criterion_group!(
     benches,
+    bench_parts,
+    bench_argon2,
     bench_hashes,
     bench_aead,
     bench_aes_block,

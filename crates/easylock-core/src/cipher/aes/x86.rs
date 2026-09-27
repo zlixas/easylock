@@ -31,3 +31,36 @@ pub unsafe fn encrypt_block(round_keys: &[[u8; 16]; 15], block: &mut [u8; 16]) {
         _mm_storeu_si128(block.as_mut_ptr().cast::<__m128i>(), state);
     }
 }
+
+/// Encrypt 8 independent blocks with the rounds interleaved (fills the AES-NI
+/// pipeline).
+///
+/// # Safety
+/// The CPU must support the `aes` target feature.
+#[allow(clippy::cast_ptr_alignment)] // unaligned loadu/storeu only
+#[target_feature(enable = "aes")]
+pub unsafe fn encrypt_blocks8(round_keys: &[[u8; 16]; 15], blocks: &mut [[u8; 16]; 8]) {
+    // SAFETY: every pointer references a 16-byte array; loadu/storeu are unaligned.
+    unsafe {
+        let load = |b: &[u8; 16]| _mm_loadu_si128(b.as_ptr().cast::<__m128i>());
+        let mut rk = [load(&round_keys[0]); 15];
+        for (i, k) in rk.iter_mut().enumerate() {
+            *k = load(&round_keys[i]);
+        }
+        let mut s = [load(&blocks[0]); 8];
+        for (i, st) in s.iter_mut().enumerate() {
+            *st = _mm_xor_si128(load(&blocks[i]), rk[0]);
+        }
+        for k in &rk[1..14] {
+            for st in &mut s {
+                *st = _mm_aesenc_si128(*st, *k);
+            }
+        }
+        for (i, st) in s.iter().enumerate() {
+            _mm_storeu_si128(
+                blocks[i].as_mut_ptr().cast::<__m128i>(),
+                _mm_aesenclast_si128(*st, rk[14]),
+            );
+        }
+    }
+}

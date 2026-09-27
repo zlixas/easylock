@@ -15,4 +15,12 @@ pub mod xor;
 pub trait BlockCipher {
     /// Encrypt one 16-byte block in place.
     fn encrypt_block(&self, block: &mut [u8; 16]);
+
+    /// Encrypt many independent blocks in place. Hardware backends override this to
+    /// interleave blocks through the AES pipeline.
+    fn encrypt_blocks(&self, blocks: &mut [[u8; 16]]) {
+        for b in blocks {
+            self.encrypt_block(b);
+        }
+    }
 }

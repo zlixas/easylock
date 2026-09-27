@@ -72,93 +72,124 @@ fn select_backend() -> Backend {
 }
 
 // --- carry-less backend ----------------------------------------------------
+//
+// Values are kept *bit-reflected* (x.reverse_bits()) so that polynomial
+// multiplication is a plain carry-less product. Bulk input uses aggregated
+// reduction: Y' = (Y ⊕ X1)·H^8 ⊕ X2·H^7 ⊕ … ⊕ X8·H, summing eight unreduced
+// 256-bit products and reducing once.
+
+/// Reduce `hi·x^128 + lo` modulo `x^128 + x^7 + x^2 + x + 1` (reflected domain).
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+#[inline(always)]
+fn reduce(lo: u128, hi: u128) -> u128 {
+    // x^128 ≡ x^7 + x^2 + x + 1, i.e. multiply by 0b1000_0111 = fold().
+    let fold = |v: u128| v ^ (v << 1) ^ (v << 2) ^ (v << 7);
+    let a_lo = fold(hi);
+    let a_high = (hi >> 127) ^ (hi >> 126) ^ (hi >> 121); // bits that spilled past x^128
+    lo ^ a_lo ^ fold(a_high)
+}
+
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+macro_rules! clmul_backend {
+    ($feature:literal, $clmul64:item) => {
+        $clmul64
+
+        /// 128×128 → 256-bit carry-less product (3-way Karatsuba), as `(lo, hi)`.
+        ///
+        /// # Safety
+        /// Requires the carry-less multiply target feature.
+        #[target_feature(enable = $feature)]
+        #[inline]
+        unsafe fn clmul128(a: u128, b: u128) -> (u128, u128) {
+            let (a0, a1) = (a as u64, (a >> 64) as u64);
+            let (b0, b1) = (b as u64, (b >> 64) as u64);
+            // SAFETY: this function has the same target feature as `clmul64`.
+            let (z0, z2, zm) = unsafe { (clmul64(a0, b0), clmul64(a1, b1), clmul64(a0 ^ a1, b0 ^ b1)) };
+            let zm = zm ^ z0 ^ z2;
+            (z0 ^ (zm << 64), z2 ^ (zm >> 64))
+        }
+
+        /// `x · H` in the GCM convention, given `h_rev = H.reverse_bits()`.
+        ///
+        /// # Safety
+        /// Requires the carry-less multiply target feature.
+        #[target_feature(enable = $feature)]
+        pub unsafe fn mul(x: u128, h_rev: u128) -> u128 {
+            // SAFETY: same target feature.
+            let (lo, hi) = unsafe { clmul128(x.reverse_bits(), h_rev) };
+            super::reduce(lo, hi).reverse_bits()
+        }
+
+        /// Absorb `data` (a multiple of 16 bytes) into accumulator `y` (GCM
+        /// convention). `pows_rev[i]` must be `(H^(i+1)).reverse_bits()`.
+        ///
+        /// # Safety
+        /// Requires the carry-less multiply target feature.
+        #[target_feature(enable = $feature)]
+        pub unsafe fn update_blocks(pows_rev: &[u128; 8], y: u128, data: &[u8]) -> u128 {
+            let block = |c: &[u8]| u128::from_be_bytes(c.try_into().expect("16 bytes")).reverse_bits();
+            let mut acc = y.reverse_bits();
+            let mut groups = data.chunks_exact(128);
+            for g in &mut groups {
+                let (mut lo, mut hi) = (0u128, 0u128);
+                for (i, c) in g.chunks_exact(16).enumerate() {
+                    let x = if i == 0 { block(c) ^ acc } else { block(c) };
+                    // SAFETY: same target feature.
+                    let (l, h) = unsafe { clmul128(x, pows_rev[7 - i]) };
+                    lo ^= l;
+                    hi ^= h;
+                }
+                acc = super::reduce(lo, hi);
+            }
+            for c in groups.remainder().chunks_exact(16) {
+                // SAFETY: same target feature.
+                let (l, h) = unsafe { clmul128(block(c) ^ acc, pows_rev[0]) };
+                acc = super::reduce(l, h);
+            }
+            acc.reverse_bits()
+        }
+    };
+}
 
 #[cfg(target_arch = "x86_64")]
 mod clmul {
     use core::arch::x86_64::{__m128i, _mm_clmulepi64_si128, _mm_set_epi64x};
 
-    /// Carry-less `64 x 64 -> 128`.
-    ///
-    /// # Safety
-    /// Requires the `pclmulqdq` target feature (checked by the caller).
-    #[target_feature(enable = "pclmulqdq")]
-    unsafe fn clmul64(a: u64, b: u64) -> u128 {
-        // SAFETY: `_mm_set_epi64x` / `_mm_clmulepi64_si128` are always valid with
-        // this feature enabled; the __m128i result is bit-compatible with u128.
-        unsafe {
-            let av: __m128i = _mm_set_epi64x(0, a as i64);
-            let bv: __m128i = _mm_set_epi64x(0, b as i64);
-            let prod = _mm_clmulepi64_si128(av, bv, 0x00);
-            core::mem::transmute::<__m128i, u128>(prod)
+    clmul_backend!(
+        "pclmulqdq",
+        /// Carry-less `64 x 64 -> 128`.
+        ///
+        /// # Safety
+        /// Requires the `pclmulqdq` target feature (checked by the caller).
+        #[target_feature(enable = "pclmulqdq")]
+        #[inline]
+        unsafe fn clmul64(a: u64, b: u64) -> u128 {
+            // SAFETY: intrinsics valid with this feature; __m128i is bit-compatible with u128.
+            unsafe {
+                let av: __m128i = _mm_set_epi64x(0, a as i64);
+                let bv: __m128i = _mm_set_epi64x(0, b as i64);
+                core::mem::transmute::<__m128i, u128>(_mm_clmulepi64_si128(av, bv, 0x00))
+            }
         }
-    }
-
-    /// # Safety
-    /// Requires the `pclmulqdq` target feature.
-    #[target_feature(enable = "pclmulqdq")]
-    pub unsafe fn mul(x: u128, h_rev: u128) -> u128 {
-        // SAFETY: feature guaranteed by caller.
-        unsafe { super::clmul_mul_generic(x, h_rev, clmul64) }
-    }
+    );
 }
 
 #[cfg(target_arch = "aarch64")]
 mod clmul {
     use core::arch::aarch64::vmull_p64;
 
-    /// Carry-less `64 x 64 -> 128`.
-    ///
-    /// # Safety
-    /// Requires the `aes`/`pmull` target feature (checked by the caller).
-    #[target_feature(enable = "aes")]
-    unsafe fn clmul64(a: u64, b: u64) -> u128 {
-        // `vmull_p64` shares this function's `aes` feature, so no `unsafe` block
-        // is needed; its `p128` result is `u128` in `core::arch::aarch64`.
-        vmull_p64(a, b)
-    }
-
-    /// # Safety
-    /// Requires the `aes`/`pmull` target feature.
-    #[target_feature(enable = "aes")]
-    pub unsafe fn mul(x: u128, h_rev: u128) -> u128 {
-        // SAFETY: feature guaranteed by caller.
-        unsafe { super::clmul_mul_generic(x, h_rev, clmul64) }
-    }
-}
-
-/// Shared body of the carry-less multiply: bit-reverse into polynomial order,
-/// 3-way Karatsuba `128x128`, shift-only reduction, bit-reverse back.
-///
-/// # Safety
-/// `clmul64` must be safe to call (its target feature is present).
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-#[inline]
-unsafe fn clmul_mul_generic(x: u128, h_rev: u128, clmul64: unsafe fn(u64, u64) -> u128) -> u128 {
-    let a = x.reverse_bits();
-    let b = h_rev; // caller passes an already bit-reversed H
-
-    let (a0, a1) = (a as u64, (a >> 64) as u64);
-    let (b0, b1) = (b as u64, (b >> 64) as u64);
-
-    // SAFETY: the caller guarantees the carry-less target feature is enabled, so
-    // every `clmul64` call below is sound.
-    let z0 = unsafe { clmul64(a0, b0) };
-    // SAFETY: as z0.
-    let z2 = unsafe { clmul64(a1, b1) };
-    // SAFETY: as z0.
-    let zm = unsafe { clmul64(a0 ^ a1, b0 ^ b1) } ^ z0 ^ z2;
-
-    let lo = z0 ^ (zm << 64);
-    let hi = z2 ^ (zm >> 64);
-
-    // Reduce  hi*x^128 + lo  mod  x^128 + x^7 + x^2 + x + 1.
-    // x^128 ≡ x^7 + x^2 + x + 1, i.e. multiply by 0b1000_0111 = fold().
-    let fold = |v: u128| v ^ (v << 1) ^ (v << 2) ^ (v << 7);
-    let a_lo = fold(hi);
-    let a_high = (hi >> 127) ^ (hi >> 126) ^ (hi >> 121); // bits that spilled past x^128
-    let reduced = lo ^ a_lo ^ fold(a_high);
-
-    reduced.reverse_bits()
+    clmul_backend!(
+        "aes",
+        /// Carry-less `64 x 64 -> 128` (`PMULL`).
+        ///
+        /// # Safety
+        /// Requires the `aes`/`pmull` target feature (checked by the caller).
+        #[target_feature(enable = "aes")]
+        #[inline]
+        unsafe fn clmul64(a: u64, b: u64) -> u128 {
+            vmull_p64(a, b)
+        }
+    );
 }
 
 // --- streaming accumulator ----------------------------------------------------
@@ -169,21 +200,33 @@ pub struct GHash {
     h: u128,
     /// Bit-reversed `H`, for the carry-less backend.
     h_rev: u128,
+    /// `(H^(i+1)).reverse_bits()` for aggregated reduction (carry-less backend).
+    pows_rev: [u128; 8],
     y: u128,
     backend: Backend,
 }
 
 impl GHash {
-    /// New accumulator from the 16-byte hash subkey.
+    /// New accumulator from the 16-byte hash subkey. Precomputes `H^1..H^8` when
+    /// the carry-less backend is active; clone the result to reuse it per message.
     #[must_use]
     pub fn new(h: &[u8; 16]) -> Self {
         let h = u128::from_be_bytes(*h);
-        Self {
+        let mut g = Self {
             h,
             h_rev: h.reverse_bits(),
+            pows_rev: [0; 8],
             y: 0,
             backend: select_backend(),
+        };
+        if g.backend == Backend::ClMul {
+            let mut p = h;
+            for i in 0..8 {
+                g.pows_rev[i] = p.reverse_bits();
+                p = g.mul(p);
+            }
         }
+        g
     }
 
     /// The multiply backend chosen for this key.
@@ -219,13 +262,20 @@ impl GHash {
     /// Absorb an arbitrary-length byte string, zero-padding the final partial
     /// block on the right (GCM convention for AAD and ciphertext).
     pub fn update_padded(&mut self, data: &[u8]) {
-        let mut chunks = data.chunks_exact(16);
-        for c in &mut chunks {
-            let mut b = [0u8; 16];
-            b.copy_from_slice(c);
-            self.update_block(&b);
+        let full = data.len() - data.len() % 16;
+        match self.backend {
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            Backend::ClMul => {
+                // SAFETY: `ClMul` is only selected after runtime feature detection.
+                self.y = unsafe { clmul::update_blocks(&self.pows_rev, self.y, &data[..full]) };
+            }
+            _ => {
+                for c in data[..full].chunks_exact(16) {
+                    self.update_block(c.try_into().expect("16 bytes"));
+                }
+            }
         }
-        let rem = chunks.remainder();
+        let rem = &data[full..];
         if !rem.is_empty() {
             let mut b = [0u8; 16];
             b[..rem.len()].copy_from_slice(rem);
@@ -251,6 +301,9 @@ impl Zeroize for GHash {
     fn zeroize(&mut self) {
         self.h.zeroize();
         self.h_rev.zeroize();
+        for p in &mut self.pows_rev {
+            p.zeroize();
+        }
         self.y.zeroize();
     }
 }
@@ -326,5 +379,37 @@ mod tests {
     fn backend_is_reported() {
         let g = GHash::new(&[0u8; 16]);
         assert!(matches!(g.backend(), Backend::Portable | Backend::ClMul));
+    }
+
+    #[test]
+    fn aggregated_update_matches_portable_blockwise() {
+        let mut s = 0x2545_f491_4f6c_dd1du64;
+        let mut next = move || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        for len in [0usize, 5, 16, 100, 127, 128, 129, 255, 256, 1000, 4096 + 7] {
+            let mut h = [0u8; 16];
+            for b in &mut h {
+                *b = next() as u8;
+            }
+            let data: alloc::vec::Vec<u8> = (0..len).map(|_| next() as u8).collect();
+            let mut fast = GHash::new(&h);
+            fast.update_padded(&data[..len / 3]);
+            fast.update_padded(&data[len / 3..]);
+            // reference: portable multiply, one block at a time, same padding points
+            let hv = u128::from_be_bytes(h);
+            let mut y = 0u128;
+            for part in [&data[..len / 3], &data[len / 3..]] {
+                for c in part.chunks(16) {
+                    let mut b = [0u8; 16];
+                    b[..c.len()].copy_from_slice(c);
+                    y = gf_mul(y ^ u128::from_be_bytes(b), hv);
+                }
+            }
+            assert_eq!(fast.y, y, "len {len}");
+        }
     }
 }

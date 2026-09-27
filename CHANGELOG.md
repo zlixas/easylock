@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Performance
+- AES-256-GCM is 4.3× faster: 8-block interleaved hardware AES and aggregated GHASH with precomputed H¹…H⁸.
+- ChaCha20-Poly1305 is 2.1× faster: 4-way NEON/SSE2 ChaCha20 and 44-bit-limb Poly1305.
+- SHA-256 is 6.5× faster using ARMv8 SHA2 / Intel SHA-NI (HMAC, HKDF and PBKDF2 benefit too).
+- Argon2id is 3.8× faster at p=4 because lanes run in parallel, and block copies were removed.
+- Bulk zeroization runs at memory speed (memset plus an optimization barrier instead of per-byte volatile writes).
+- End to end, `lock` on 500 MB now takes 0.10–0.15 s (was 1.41 s) and `unlock` 0.18 s (was 1.31 s).
+
 ### Added
 - **Encrypted vaults** (`easylock vault init/add/ls/get/cat/rm/passwd/info`): files stay encrypted at rest, names and
   sizes live in an encrypted index, updates are atomic with a process lock, `vault passwd` re-keys instantly, and

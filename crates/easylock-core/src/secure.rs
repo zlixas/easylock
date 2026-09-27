@@ -13,11 +13,21 @@
 use core::sync::atomic::{compiler_fence, Ordering};
 
 /// Overwrite `buf` with zeros in a way the optimizer may not remove.
+///
+/// Small buffers use per-byte volatile stores. Large ones use one `memset`
+/// followed by an optimisation barrier: `black_box` makes the compiler assume the
+/// zeroed memory is read afterwards, so the stores can't be dropped as dead. This
+/// keeps wiping multi-megabyte plaintext buffers at memory bandwidth.
 #[inline(never)]
 pub fn zeroize_bytes(buf: &mut [u8]) {
-    for byte in buf.iter_mut() {
-        // SAFETY: `byte` is a valid, aligned, uniquely-borrowed `u8`.
-        unsafe { core::ptr::write_volatile(byte, 0) };
+    if buf.len() >= 256 {
+        buf.fill(0);
+        core::hint::black_box(&*buf);
+    } else {
+        for byte in buf.iter_mut() {
+            // SAFETY: `byte` is a valid, aligned, uniquely-borrowed `u8`.
+            unsafe { core::ptr::write_volatile(byte, 0) };
+        }
     }
     compiler_fence(Ordering::SeqCst);
 }
@@ -25,6 +35,12 @@ pub fn zeroize_bytes(buf: &mut [u8]) {
 /// Overwrite a slice of `u64` limbs with zeros (used by the big-integer engine).
 #[inline(never)]
 pub fn zeroize_u64s(buf: &mut [u64]) {
+    if buf.len() >= 32 {
+        buf.fill(0);
+        core::hint::black_box(&*buf);
+        compiler_fence(Ordering::SeqCst);
+        return;
+    }
     for limb in buf.iter_mut() {
         // SAFETY: `limb` is a valid, aligned, uniquely-borrowed `u64`.
         unsafe { core::ptr::write_volatile(limb, 0) };

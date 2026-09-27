@@ -1,7 +1,8 @@
 //! AES-256-GCM (NIST SP 800-38D) with a 96-bit nonce.
 //!
 //! AES block encryption dispatches to hardware (see [`crate::cipher::aes`]);
-//! GHASH currently uses the constant-time portable multiply.
+//! GHASH uses PCLMULQDQ / PMULL with 8-block aggregated reduction when available,
+//! otherwise the constant-time portable multiply.
 
 use super::ghash::GHash;
 use super::{Aead, Tag};
@@ -15,7 +16,8 @@ use alloc::vec::Vec;
 /// AES-256-GCM AEAD.
 pub struct Aes256Gcm {
     aes: Aes256,
-    h: [u8; 16],
+    /// GHASH keyed with `H`, including precomputed powers; cloned per message.
+    ghash: GHash,
 }
 
 impl Aes256Gcm {
@@ -27,7 +29,9 @@ impl Aes256Gcm {
         let aes = Aes256::new(key)?;
         let mut h = [0u8; 16];
         aes.encrypt_block_into(&mut h); // H = E_K(0^128)
-        Ok(Self { aes, h })
+        let ghash = GHash::new(&h);
+        h.zeroize();
+        Ok(Self { aes, ghash })
     }
 
     /// The AES backend selected for this key ("aes-ni", "armv8-crypto", ...).
@@ -44,7 +48,7 @@ impl Aes256Gcm {
     }
 
     fn compute_tag(&self, j0: &[u8; 16], aad: &[u8], ciphertext: &[u8]) -> Tag {
-        let mut gh = GHash::new(&self.h);
+        let mut gh = self.ghash.clone();
         gh.update_padded(aad);
         gh.update_padded(ciphertext);
         let mut s = gh.finalize((aad.len() as u64) * 8, (ciphertext.len() as u64) * 8);
@@ -112,7 +116,7 @@ impl Aead for Aes256Gcm {
 
 impl Drop for Aes256Gcm {
     fn drop(&mut self) {
-        self.h.zeroize();
+        // `aes` and `ghash` zeroize themselves on drop.
     }
 }
 
