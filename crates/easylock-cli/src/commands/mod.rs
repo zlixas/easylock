@@ -9,3 +9,4 @@ pub mod keygen;
 pub mod lock;
 pub mod password;
 pub mod sign;
+pub mod vault;

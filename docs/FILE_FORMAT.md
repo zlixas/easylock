@@ -138,13 +138,42 @@ The checksum is the first 4 bytes of `SHA-256(prefix ‖ body)`, which catches c
 An identity file consists of comment lines (`# public key: elkpub1…`) followed by either the secret string or an `elk1.` token that
 encrypts the secret string with a password.
 
-## 6. Test vectors
+## 6. Vaults
+
+A vault is a directory in which files stay encrypted at rest:
+
+```
+VAULT/
+  vault.elk             ELK2 file (password and/or recipient slots); payload =
+                        "ELKVAULT" ‖ version u8 (=1) ‖ cipher u8 ‖ master_key[32]
+  index                 "ELKI" ‖ nonce[12] ‖ ChaCha20-Poly1305(k_index, nonce, "elkvault index v1", index)
+  objects/ab/<32 hex>   "ELKO" ‖ base_nonce[12] ‖ chunk stream (§1 layout)
+  .lock                 exists while a process is modifying the vault
+```
+
+```
+k_index  = HKDF-SHA-256(salt = "", ikm = master, info = "elkvault index")
+k_object = HKDF-SHA-256(salt = object_id[16], ikm = master, info = "elkvault object")
+index    = generation u64 ‖ count u32 ‖ entry*
+entry    = path_len u16 ‖ path ‖ object_id[16] ‖ size u64 ‖ mtime i64 ‖ mode u32 ‖ added i64
+```
+
+- File names, sizes and times exist only inside the encrypted index. Object names are random, and each object's size is
+  only visible as ciphertext length.
+- Object keys are bound to their random ids, so an attacker can't swap objects between entries.
+- `index` and `vault.elk` are replaced atomically (temp file, fsync, rename). Unreferenced objects are deleted only after the new
+  index has been committed.
+- Changing the password or recipients (`vault passwd`) rewrites only `vault.elk`. The master key and objects stay the same.
+- **Known limitation:** someone with write access can roll the whole vault back to an earlier state. Detecting that
+  would need a trusted counter outside the vault.
+
+## 7. Test vectors
 
 The unit tests in `container.rs` check round-trips, tampering, truncation and wrong-password rejection. The
 desktop GUI's test `elk_format_interoperates_with_core_container` checks that its streaming implementation and
 the in-memory core implementation produce files that each can read.
 
-## 7. Versioning
+## 8. Versioning
 
 A future incompatible change will use a new magic (`ELK3`) and a new token prefix (`elk2.`). Readers should reject unknown
 magics and cipher ids.

@@ -150,6 +150,12 @@ pub enum Msg {
     SlotsSummary { recipients: usize, password: bool },
     SomeFailed(usize),
     SkippedSpecial(u64),
+    Vault(String),
+    VaultCreated(String),
+    VaultAdded { files: u64, size: String },
+    VaultRemoved(usize),
+    VaultMissing(String),
+    VaultRekeyed,
 }
 
 impl Msg {
@@ -362,6 +368,32 @@ impl Msg {
                 }
                 format!("{} {}", p(["unlockable by:", "açabilen:", "se abre con:"]), parts.join(" + "))
             }
+            Msg::Vault(e) => format!("{}: {e}", p(["vault error", "kasa hatası", "error del almacén"])),
+            Msg::VaultCreated(path) => match lang {
+                Lang::En => format!("vault created: {path} (add files with `easylock vault add {path} FILE…`)"),
+                Lang::Tr => format!("kasa oluşturuldu: {path} (`easylock vault add {path} DOSYA…` ile dosya ekleyin)"),
+                Lang::Es => format!("almacén creado: {path} (añada archivos con `easylock vault add {path} ARCHIVO…`)"),
+            },
+            Msg::VaultAdded { files, size } => match lang {
+                Lang::En => format!("added {files} file(s), {size}: stored encrypted"),
+                Lang::Tr => format!("{files} dosya eklendi, {size}: şifreli olarak saklanıyor"),
+                Lang::Es => format!("{files} archivo(s) añadido(s), {size}: guardados cifrados"),
+            },
+            Msg::VaultRemoved(n) => match lang {
+                Lang::En => format!("removed {n} file(s) from the vault"),
+                Lang::Tr => format!("kasadan {n} dosya silindi"),
+                Lang::Es => format!("{n} archivo(s) eliminado(s) del almacén"),
+            },
+            Msg::VaultMissing(name) => match lang {
+                Lang::En => format!("not in the vault: {name}"),
+                Lang::Tr => format!("kasada yok: {name}"),
+                Lang::Es => format!("no está en el almacén: {name}"),
+            },
+            Msg::VaultRekeyed => p([
+                "vault unlock keys changed (stored files are untouched)",
+                "kasa açma anahtarları değişti (saklanan dosyalara dokunulmadı)",
+                "claves de apertura cambiadas (los archivos guardados no se tocan)",
+            ]),
             Msg::SkippedSpecial(n) => match lang {
                 Lang::En => format!("warning: {n} symlink(s) or special file(s) were not included"),
                 Lang::Tr => format!("uyarı: {n} sembolik bağ veya özel dosya dahil edilmedi"),

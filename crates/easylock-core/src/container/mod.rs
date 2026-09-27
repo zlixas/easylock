@@ -37,6 +37,8 @@ pub mod archive;
 pub mod elk2;
 #[cfg(feature = "std")]
 pub mod stream;
+#[cfg(feature = "std")]
+pub mod vault;
 
 use crate::aead::{Aead, Aes256Gcm, ChaCha20Poly1305};
 use crate::encode::base64;

@@ -63,6 +63,19 @@ Si su sistema tiene configurado `LANG=es_ES.UTF-8`, la interfaz se abre en espa�
 | Post-cuántico | ML-KEM-512/768/1024 (FIPS 203) |
 | Contenedores | archivos `.elk` y tokens de texto `elk1.` ([formato](docs/FILE_FORMAT.md)) |
 
+
+## Almacén cifrado
+
+Un almacén es una carpeta donde los archivos **siguen cifrados**. Los nombres, tamaños y fechas también quedan ocultos en un índice cifrado.
+
+```sh
+easylock vault init ~/Privado.vault
+easylock vault add  ~/Privado.vault impuestos/ dni.pdf --shred
+easylock vault ls   ~/Privado.vault
+easylock vault get  ~/Privado.vault impuestos -o ~/Escritorio
+easylock vault passwd ~/Privado.vault -r elkpub1…   # cambiar claves sin volver a cifrar los archivos
+```
+
 ## Las cuatro interfaces
 
 - **🌐 Sitio web:** 20 herramientas en 5 categorías. Incluye cifrado de archivos y mensajes, hash en vivo,
