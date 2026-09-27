@@ -39,6 +39,14 @@ Include:
 
 We aim to acknowledge reports within 7 days. We credit reporters in the advisory and the changelog unless they ask us not to.
 
+## Past advisories
+
+| Date | Issue | Severity | Fixed in |
+|---|---|---|---|
+| 2026-09-27 | Ed25519 accepted forged signatures under small-order public keys (non-strict verification) | High | `main` after 0.1.0 |
+| 2026-09-27 | Server API: unbounded KDF costs, permissive CORS, zero-randomness fallback | Medium | `main` after 0.1.0 |
+| 2026-09-27 | A throwaway test RSA key (`rsa2048.pem`, never used by any code) was present in early commits | Informational | removed from the tree |
+
 ## Supported versions
 
 Only the latest commit on `main` receives fixes.

@@ -5,6 +5,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- **Ed25519 signature forgery with small-order public keys (high).** `verify` accepted the forged signature
+  `R = B, S = 1` for *any* message under the identity public key `01 00…00` (and the other small-order points), and this was
+  reachable through `POST /v1/ed25519/verify` and `easylock verify`. Verification is now strict (the same semantics as
+  `ed25519-dalek::verify_strict`): small-order `A` or `R` and non-canonical `A` or `S` are rejected. Regression tests cover all 8
+  small-order points. Thanks to the external review that reported it.
+- Server: a failing OS RNG now aborts key generation instead of silently using all-zero randomness.
+- Server: Argon2 and PBKDF2 costs are capped (m ≤ 1 GiB, t ≤ 16, p ≤ 16, PBKDF2 ≤ 10⁷ iterations, output ≤ 1 KiB), and the
+  permissive CORS policy is gone. Cross-origin browser requests to the local API are now refused unless
+  `EASYLOCK_CORS_ORIGIN` names a trusted origin.
+- `RsaPrivateKey::decrypt_pkcs1v15` is deprecated, because it is a Bleichenbacher/Marvin padding-oracle hazard. Use OAEP.
+- X25519: the new `diffie_hellman_checked` rejects small-order peers. The server and web `x25519` endpoints refuse an
+  all-zero shared secret.
+- Supply chain: GitHub Actions are pinned to commit SHAs, `curl | sh` has been replaced with checksum-verified installs,
+  `.gitignore` now blocks key material, cargo-deny runs in CI, and Dependabot is enabled.
+
+### Quality
+- **Project Wycheproof**: 1,485 vectors (AES-GCM, ChaCha20-Poly1305, X25519, Ed25519, HKDF, HMAC-SHA-256/512) pass on
+  ARM, x86-64 and the portable build.
+- **Fuzzing** with cargo-fuzz: 5 targets (ELK headers, chunk streams, archives, decoders and keys, AEAD round-trip).
+  21.7 million local runs found no crashes, and CI runs each target for 60 s.
+- Line-coverage reporting in CI (currently ≈75%).
+
 ### Performance
 - AES-256-GCM is 4.3× faster: 8-block interleaved hardware AES and aggregated GHASH with precomputed H¹…H⁸.
 - ChaCha20-Poly1305 is 2.1× faster: 4-way NEON/SSE2 ChaCha20 and 44-bit-limb Poly1305.

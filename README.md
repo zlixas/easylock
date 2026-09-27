@@ -219,6 +219,20 @@ no dependencies. The hardware paths use each CPU's own instructions, selected at
 
 Every fast path is checked against the portable implementation in a differential test, on ARM natively and on x86-64 under Rosetta and in CI.
 
+## Quality & assurance
+
+| Check | Where |
+|---|---|
+| Official test vectors (NIST CAVP, RFCs, FIPS) | `cargo test` |
+| **Project Wycheproof**: 1,485 edge-case vectors | `crates/easylock-core/tests/wycheproof.rs` |
+| Differential tests: every SIMD/hardware path vs. the portable code | unit tests, on ARM, x86-64 and portable builds |
+| **Fuzzing** (cargo-fuzz): headers, chunk streams, archives, decoders, AEAD | `fuzz/`, 60 s per target in CI |
+| Dependency audit: licenses, RustSec advisories, sources | `cargo deny check` in CI |
+| Coverage | `cargo llvm-cov` summary in every CI run |
+| Pinned CI actions and Dependabot | `.github/` |
+
+Found a problem? See [SECURITY.md](SECURITY.md).
+
 ## Architecture
 
 ```mermaid
