@@ -375,3 +375,148 @@ pub fn x25519(scalar_hex: &str, point_hex: &str) -> Result<String, JsValue> {
 pub fn random_bytes(n: usize) -> Vec<u8> {
     random_vec(n)
 }
+
+// --- MAC / KDF extras ------------------------------------------------------
+
+/// HMAC tag (hex) with `sha256`, `sha512`, `sha3-256` or `keccak256`.
+#[wasm_bindgen]
+pub fn hmac(algo: &str, key: &[u8], data: &[u8]) -> Result<String, JsValue> {
+    use easylock_core::hash::{Keccak256, Sha256, Sha3_256, Sha512};
+    use easylock_core::mac::Hmac;
+    let tag = match algo.to_ascii_lowercase().replace(['-', '_'], "").as_str() {
+        "sha256" => Hmac::<Sha256>::mac(key, data),
+        "sha512" => Hmac::<Sha512>::mac(key, data),
+        "sha3256" => Hmac::<Sha3_256>::mac(key, data),
+        "keccak256" => Hmac::<Keccak256>::mac(key, data),
+        other => return Err(err(format!("unknown hmac hash `{other}`"))),
+    };
+    Ok(hex::encode(&tag))
+}
+
+/// HKDF-SHA-256 (RFC 5869): extract + expand to `len` bytes.
+#[wasm_bindgen]
+pub fn hkdf_sha256(ikm: &[u8], salt: &[u8], info: &[u8], len: usize) -> Result<Vec<u8>, JsValue> {
+    easylock_core::kdf::Hkdf::<easylock_core::hash::Sha256>::derive(salt, ikm, info, len)
+        .map_err(err)
+}
+
+/// Argon2id → PHC string (`$argon2id$v=19$m=…`), interoperable with other tools.
+#[wasm_bindgen]
+pub fn argon2id_phc(
+    password: &[u8],
+    salt: &[u8],
+    m_cost: u32,
+    t_cost: u32,
+    parallelism: u32,
+) -> Result<String, JsValue> {
+    argon2::hash_phc(
+        password,
+        salt,
+        ArgonParams {
+            m_cost,
+            t_cost,
+            parallelism,
+            out_len: 32,
+        },
+    )
+    .map_err(err)
+}
+
+/// Verify a password against a PHC string.
+#[wasm_bindgen]
+pub fn argon2_verify(password: &[u8], phc: &str) -> Result<bool, JsValue> {
+    argon2::verify_phc(password, phc).map_err(err)
+}
+
+/// X25519 public key (hex) for a secret scalar (hex).
+#[wasm_bindgen]
+pub fn x25519_public(secret_hex: &str) -> Result<String, JsValue> {
+    let s: [u8; 32] = hex::decode(secret_hex)
+        .ok()
+        .and_then(|v| v.try_into().ok())
+        .ok_or_else(|| err("secret must be 32 hex bytes"))?;
+    Ok(hex::encode(&easylock_core::ec::x25519_base(&s)))
+}
+
+#[derive(Serialize)]
+struct HashAll {
+    sha256: String,
+    blake3: String,
+    sha3_256: String,
+    keccak256: String,
+    sha512: String,
+}
+
+/// Every supported digest of `data` at once.
+#[wasm_bindgen]
+pub fn hash_all(data: &[u8]) -> JsValue {
+    let hx = |a: Algorithm| hex::encode(&a.hash(data));
+    js(&HashAll {
+        sha256: hx(Algorithm::Sha256),
+        blake3: hx(Algorithm::Blake3),
+        sha3_256: hx(Algorithm::Sha3_256),
+        keccak256: hx(Algorithm::Keccak256),
+        sha512: hx(Algorithm::Sha512),
+    })
+}
+
+// --- .elk files & elk1 tokens (shared with the CLI, TUI and desktop app) ----
+
+fn container_cipher(name: &str) -> Result<easylock_core::container::Cipher, JsValue> {
+    easylock_core::container::Cipher::parse(name)
+        .ok_or_else(|| err(format!("unknown cipher `{name}`")))
+}
+
+/// Encrypt bytes into a `.elk` file (Argon2id 64 MiB).
+#[wasm_bindgen]
+pub fn elk_seal_file(data: &[u8], password: &[u8], cipher: &str) -> Result<Vec<u8>, JsValue> {
+    use easylock_core::container;
+    container::seal_file(
+        data,
+        password,
+        container_cipher(cipher)?,
+        container::FILE_PARAMS,
+        &mut rng(),
+    )
+    .map_err(err)
+}
+
+/// Decrypt a `.elk` file.
+#[wasm_bindgen]
+pub fn elk_open_file(data: &[u8], password: &[u8]) -> Result<Vec<u8>, JsValue> {
+    easylock_core::container::open_file(data, password)
+        .map_err(|_| err("wrong password, or the file is corrupted / not an easylock file"))
+}
+
+/// Cipher name recorded in a `.elk` header (for display before decrypting).
+#[wasm_bindgen]
+pub fn elk_inspect(data: &[u8]) -> Result<String, JsValue> {
+    let h = easylock_core::container::parse_header(data).map_err(err)?;
+    Ok(format!(
+        "{} · Argon2id m={} KiB t={} p={}",
+        h.cipher.name(),
+        h.params.m_cost,
+        h.params.t_cost,
+        h.params.parallelism
+    ))
+}
+
+/// Encrypt text into an `elk1.` token.
+#[wasm_bindgen]
+pub fn elk_seal_token(text: &str, password: &[u8], cipher: &str) -> Result<String, JsValue> {
+    easylock_core::container::seal_token(
+        text.as_bytes(),
+        password,
+        container_cipher(cipher)?,
+        &mut rng(),
+    )
+    .map_err(err)
+}
+
+/// Decrypt an `elk1.` token.
+#[wasm_bindgen]
+pub fn elk_open_token(token: &str, password: &[u8]) -> Result<String, JsValue> {
+    let pt = easylock_core::container::open_token(token, password)
+        .map_err(|_| err("wrong password or corrupted token"))?;
+    Ok(String::from_utf8_lossy(&pt).into_owned())
+}

@@ -4,7 +4,7 @@
 #![allow(clippy::fn_params_excessive_bools)]
 
 use easylock_core::aead::{Aead, Aes256Gcm, ChaCha20Poly1305};
-use easylock_core::encode::{base64, hex, Transform};
+use easylock_core::encode::{hex, Transform};
 use easylock_core::hash::Algorithm;
 use easylock_core::kdf::argon2::{self, Params as ArgonParams};
 use easylock_core::secure::{Secret, Zeroize};
@@ -389,11 +389,7 @@ pub fn argon2_phc(
     };
     let tag = argon2::hash(&pw, &salt, params).map_err(|e| e.to_string())?;
     pw.zeroize();
-    Ok(format!(
-        "$argon2id$v=19$m={m_cost},t={t_cost},p={parallelism}${}${}",
-        base64::encode(&salt, base64::Variant::UrlNoPad),
-        base64::encode(&tag, base64::Variant::UrlNoPad),
-    ))
+    Ok(argon2::phc_string(&params, &salt, &tag))
 }
 
 /// A generated key pair, hex-encoded.
@@ -515,6 +511,53 @@ mod tests {
         let _ = std::fs::remove_file(&src);
         let _ = std::fs::remove_file(&op.out_path);
         let _ = std::fs::remove_file(&dec.out_path);
+    }
+
+    /// The desktop app's streaming `.elk` writer/reader and the shared
+    /// in-memory implementation in `easylock_core::container` must agree.
+    #[test]
+    fn elk_format_interoperates_with_core_container() {
+        use easylock_core::container;
+        let dir = std::env::temp_dir();
+        let src = dir.join("easylock_gui_interop.bin");
+        let data: Vec<u8> = (0..(CHUNK + 4321)).map(|i| (i % 253) as u8).collect();
+        std::fs::write(&src, &data).unwrap();
+
+        // GUI (streaming) -> core (in-memory)
+        let op =
+            encrypt_file(src.to_str().unwrap(), "aes-256-gcm", "pw".into(), |_, _| {}).unwrap();
+        let sealed = std::fs::read(&op.out_path).unwrap();
+        assert_eq!(container::open_file(&sealed, b"pw").unwrap(), data);
+
+        // core (in-memory) -> GUI (streaming)
+        let mut rng = |b: &mut [u8]| os_random(b).unwrap();
+        let fast = easylock_core::kdf::argon2::Params {
+            m_cost: 64,
+            t_cost: 1,
+            parallelism: 1,
+            out_len: 32,
+        };
+        let core_sealed = container::seal_file(
+            &data,
+            b"pw",
+            container::Cipher::ChaCha20Poly1305,
+            fast,
+            &mut rng,
+        )
+        .unwrap();
+        let core_path = dir.join("easylock_gui_interop_core.bin.elk");
+        std::fs::write(&core_path, &core_sealed).unwrap();
+        let dec = decrypt_file(core_path.to_str().unwrap(), "pw".into(), |_, _| {}).unwrap();
+        assert_eq!(std::fs::read(&dec.out_path).unwrap(), data);
+
+        for p in [
+            src.to_str().unwrap().to_string(),
+            op.out_path,
+            core_path.to_str().unwrap().to_string(),
+            dec.out_path,
+        ] {
+            let _ = std::fs::remove_file(p);
+        }
     }
 
     #[test]

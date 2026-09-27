@@ -43,6 +43,7 @@ pub mod secure;
 
 pub mod aead;
 pub mod cipher;
+pub mod container;
 pub mod ec;
 pub mod hash;
 pub mod kdf;

@@ -1,16 +1,18 @@
-//! `easylock` command-line interface.
+//! `easylock` — command-line interface and terminal UI.
 //!
-//! Subcommands: `hash`, `encode`, `decode`, `encrypt`, `decrypt`.
-//! Help text, command descriptions, error messages and status logs are available
-//! in English (`en`) and Turkish (`tr`). The language comes from `--lang` or the
-//! system locale (`tr_TR` → Turkish, otherwise English).
+//! Subcommands: `lock`, `unlock`, `hash`, `encode`, `decode`, `encrypt`, `decrypt`, `hmac`, `kdf`,
+//! `password`, `keygen`, `sign`, `verify`, `info`, and `tui` (full-screen UI).
+//! Help, messages and the TUI are available in English, Turkish and Spanish,
+//! chosen with `--lang en|tr|es` or the system locale.
 
 mod commands;
 mod help;
 mod i18n;
 mod io;
+mod tui;
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use commands::crypt::Direction;
 use i18n::Lang;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,8 +20,8 @@ use std::process::ExitCode;
 #[derive(Parser, Debug)]
 #[command(name = "easylock", version)]
 pub struct Cli {
-    /// Interface language: `tr` or `en` (default: system locale).
-    #[arg(long, global = true, value_name = "tr|en")]
+    /// Interface language: `en`, `tr` or `es` (default: system locale).
+    #[arg(long, global = true, value_name = "en|tr|es")]
     lang: Option<String>,
 
     #[command(subcommand)]
@@ -28,7 +30,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Hash data with SHA-256/512, Keccak-256 or SHA3-256.
+    /// Hash data with SHA-256/512, SHA3-256, Keccak-256 or BLAKE3.
     Hash(commands::hash::Args),
     /// Encode bytes to text (hex/base64/base64url/base58/rot13), with chaining.
     Encode(commands::encode::EncodeArgs),
@@ -38,6 +40,26 @@ enum Command {
     Encrypt(commands::crypt::Args),
     /// Decrypt data produced by `encrypt`.
     Decrypt(commands::crypt::Args),
+    /// Encrypt a file with a password (`.elk`, works with the app and website).
+    Lock(commands::lock::LockArgs),
+    /// Decrypt a `.elk` file.
+    Unlock(commands::lock::UnlockArgs),
+    /// Keyed message authentication code.
+    Hmac(commands::hmac::Args),
+    /// Password hashing / key derivation (Argon2id, PBKDF2).
+    Kdf(commands::kdf::Args),
+    /// Generate strong random passwords.
+    Password(commands::password::Args),
+    /// Generate a key pair (Ed25519, X25519, ML-KEM, RSA).
+    Keygen(commands::keygen::Args),
+    /// Sign data with an Ed25519 seed.
+    Sign(commands::sign::SignArgs),
+    /// Verify an Ed25519 signature.
+    Verify(commands::sign::VerifyArgs),
+    /// Show version, hardware backends and supported algorithms.
+    Info,
+    /// Open the full-screen terminal UI.
+    Tui,
 }
 
 fn main() -> ExitCode {
@@ -70,8 +92,18 @@ fn main() -> ExitCode {
         Command::Hash(a) => commands::hash::run(&a, lang),
         Command::Encode(a) => commands::encode::run_encode(&a, lang),
         Command::Decode(a) => commands::encode::run_decode(&a, lang),
-        Command::Encrypt(a) => commands::crypt::run(&a, lang, commands::crypt::Direction::Encrypt),
-        Command::Decrypt(a) => commands::crypt::run(&a, lang, commands::crypt::Direction::Decrypt),
+        Command::Encrypt(a) => commands::crypt::run(&a, lang, Direction::Encrypt),
+        Command::Decrypt(a) => commands::crypt::run(&a, lang, Direction::Decrypt),
+        Command::Lock(a) => commands::lock::run_lock(&a, lang),
+        Command::Unlock(a) => commands::lock::run_unlock(&a, lang),
+        Command::Hmac(a) => commands::hmac::run(&a, lang),
+        Command::Kdf(a) => commands::kdf::run(&a, lang),
+        Command::Password(a) => commands::password::run(&a, lang),
+        Command::Keygen(a) => commands::keygen::run(&a, lang),
+        Command::Sign(a) => commands::sign::run_sign(&a, lang),
+        Command::Verify(a) => commands::sign::run_verify(&a, lang),
+        Command::Info => commands::info::run(lang),
+        Command::Tui => tui::run(lang),
     };
 
     match result {

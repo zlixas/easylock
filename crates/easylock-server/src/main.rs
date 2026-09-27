@@ -310,14 +310,7 @@ async fn kdf_argon2(Json(req): Json<Argon2Req>) -> ApiResult<Json<Argon2Resp>> {
     Ok(Json(Argon2Resp {
         tag_hex: hex::encode(&tag),
         salt_hex: hex::encode(&salt),
-        phc: format!(
-            "$argon2id$v=19$m={},t={},p={}${}${}",
-            req.m_cost,
-            req.t_cost,
-            req.parallelism,
-            base64::encode(&salt, base64::Variant::UrlNoPad),
-            base64::encode(&tag, base64::Variant::UrlNoPad),
-        ),
+        phc: argon2::phc_string(&params, &salt, &tag),
     }))
 }
 

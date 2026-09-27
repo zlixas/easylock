@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use easylock in teaching or research, please cite it as below."
+title: "easylock: a from-scratch cryptography toolkit in Rust"
+type: software
+authors:
+  - name: "easylock contributors"
+repository-code: "https://github.com/zlixas/easylock"
+url: "https://zlixas.github.io/easylock/"
+license:
+  - Apache-2.0
+  - MIT
+version: 0.1.0
+date-released: 2026-09-27
+keywords:
+  - cryptography
+  - rust
+  - webassembly
+  - education
+  - post-quantum
+  - argon2
+  - aes-gcm
+  - chacha20-poly1305
+  - ed25519
+  - ml-kem
+abstract: >-
+  easylock implements modern cryptographic primitives from first principles in dependency-free Rust:
+  SHA-2, SHA-3, BLAKE3, AES-GCM, ChaCha20-Poly1305, Argon2id, X25519, Ed25519, RSA and ML-KEM (FIPS 203).
+  Each primitive is validated against official test vectors. The same core is exposed through a CLI, a terminal UI,
+  a desktop application and a WebAssembly website. The website has explanatory material in English, Turkish and Spanish.

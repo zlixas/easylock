@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔐 Report a security vulnerability
+    url: https://github.com/zlixas/easylock/security/advisories/new
+    about: Please report security issues privately.
+  - name: 🌐 Try easylock in your browser
+    url: https://zlixas.github.io/easylock/
+    about: The live website.

@@ -67,6 +67,7 @@ fn target_label(output: &Option<PathBuf>, lang: Lang) -> String {
         _ => match lang {
             Lang::En => "stdout".to_string(),
             Lang::Tr => "standart çıktı".to_string(),
+            Lang::Es => "salida estándar".to_string(),
         },
     }
 }

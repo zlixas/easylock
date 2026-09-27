@@ -14,7 +14,8 @@ edition = "2021"
 rust-version = "1.98"
 license = "Apache-2.0 OR MIT"
 authors = ["easylock contributors"]
-repository = "https://github.com/easylock/easylock"
+repository = "https://github.com/zlixas/easylock"
+homepage = "https://zlixas.github.io/easylock/"
 description = "A from-scratch cryptography library, CLI, and engine written in Rust"
 
 [workspace.lints.rust]
