@@ -110,43 +110,70 @@ const CIPHERS = [["chacha20-poly1305", "ChaCha20-Poly1305"], ["aes-256-gcm", "AE
 /* ============================================================ symmetric */
 
 function fileTool() {
-  let mode = "encrypt";
-  let data = null, fileName = "";
+  let mode = "encrypt", protect = "password";
+  let data = null, fileName = "", info = null;
   const pw = passwordInput();
   const pw2 = passwordInput();
+  const recips = textarea({ placeholder: "elkpub1…", rows: 3 });
+  const secret = textarea({ placeholder: "ELK-SECRET-KEY-1…", rows: 2 });
   const cipher = select(CIPHERS);
-  const info = h("div", { class: "font-mono text-[11px] text-accent-400" });
+  const infoLine = h("div", { class: "font-mono text-[11px] text-accent-400" });
   const result = h("div", { class: "space-y-2" });
+
+  const pwField = field("field.password", pw);
+  const meter = strengthMeter(pw.input);
+  const pw2Field = field("field.password2", pw2);
+  const recipField = field("field.recipients", recips);
+  const secretField = field("field.identity", secret);
+  const cipherField = field("field.cipher", cipher);
+  const go = button("btn.encrypt", null, ICONS.lock);
+
+  const protectSeg = segmented(
+    [["password", t("protect.password")], ["keys", t("protect.keys")], ["both", t("protect.both")]],
+    protect, (v) => { protect = v; layout(); });
+
+  function layout() {
+    const enc = mode === "encrypt";
+    const usePw = enc ? protect !== "keys" : !info || info.password || info.version === 1;
+    const useKeys = enc ? protect !== "password" : Boolean(info && info.recipients > 0);
+    hidden(protectSeg, !enc);
+    hidden(pwField, !usePw); hidden(meter, !enc || !usePw); hidden(pw2Field, !enc || !usePw);
+    hidden(recipField, !enc || !useKeys); hidden(secretField, enc || !useKeys);
+    hidden(cipherField, !enc);
+    go.lastChild.textContent = t(enc ? "btn.encrypt" : "btn.decrypt");
+  }
+
   const zone = dropZone("drop.file", (bytes, f) => {
-    data = bytes; fileName = f.name; result.replaceChildren();
+    data = bytes; fileName = f.name; result.replaceChildren(); info = null; infoLine.textContent = "";
     if (mode === "decrypt") {
-      try { info.textContent = "🔐 " + api.elkInspect(bytes); }
-      catch (e) { info.textContent = "✕ " + (e.message || e); }
+      try {
+        info = api.elkInfo(bytes);
+        infoLine.textContent = "🔐 " + info.summary;
+        if (info.folder) result.replaceChildren(badge(false, t("msg.folder")));
+        else if (info.recipients > 0 && !info.password) result.replaceChildren(h("div", { class: "text-[12px] text-slate-400" }, t("msg.needKey")));
+      } catch (e) { infoLine.textContent = "✕ " + (e.message || e); }
+      layout();
     }
     status(`${f.name} ${t("drop.loaded")}`, "ok");
   });
 
-  const pw2Field = field("field.password2", pw2);
-  const cipherField = field("field.cipher", cipher);
-  const meter = strengthMeter(pw.input);
-  const go = button("btn.encrypt", null, ICONS.lock);
-
   const seg = segmented([["encrypt", t("mode.encrypt")], ["decrypt", t("mode.decrypt")]], mode, (m) => {
-    mode = m; data = null; zone.reset(); info.textContent = ""; result.replaceChildren();
-    hidden(pw2Field, m === "decrypt"); hidden(cipherField, m === "decrypt"); hidden(meter, m === "decrypt");
-    go.lastChild.textContent = t(m === "encrypt" ? "btn.encrypt" : "btn.decrypt");
+    mode = m; data = null; info = null; zone.reset(); infoLine.textContent = ""; result.replaceChildren();
+    layout();
   });
 
   go.onclick = busy(go, async () => {
     if (!data) throw new Error(t("msg.pickFile"));
-    if (!pw.input.value) throw new Error(t("msg.pwEmpty"));
     let out, name;
     if (mode === "encrypt") {
-      if (pw.input.value !== pw2.input.value) throw new Error(t("msg.pwDiffer"));
-      out = api.elkSealFile(data, pw.input.value, cipher.value);
+      const usePw = protect !== "keys";
+      if (usePw && !pw.input.value) throw new Error(t("msg.pwEmpty"));
+      if (usePw && pw.input.value !== pw2.input.value) throw new Error(t("msg.pwDiffer"));
+      out = api.elkSeal(data, usePw ? pw.input.value : "", protect === "password" ? "" : recips.value, cipher.value);
       name = fileName + ".elk";
     } else {
-      out = api.elkOpenFile(data, pw.input.value);
+      if (info && info.folder) throw new Error(t("msg.folder"));
+      out = api.elkOpen(data, pw.input.value, secret.value);
       name = fileName.endsWith(".elk") ? fileName.slice(0, -4) : fileName + ".dec";
     }
     const dl = h("button", { class: "btn", type: "button", onClick: () => download(out, name) },
@@ -158,8 +185,45 @@ function fileTool() {
     status(`${t("msg.done")} ✓`, "ok");
   }, t("msg.deriving"));
 
+  layout();
   return toolView("sym.file",
-    card(seg, zone, info, field("field.password", pw), meter, pw2Field, cipherField, actions(go), result));
+    card(seg, zone, infoLine, protectSeg, recipField, secretField, pwField, meter, pw2Field, cipherField, actions(go), result));
+}
+
+function identityTool() {
+  const view = h("div", { class: "space-y-3" });
+  const show = (idt, withSecret) => {
+    const rows = [
+      h("span", { class: "label" }, t("id.public")),
+      h("output", { class: "out" }, idt.public),
+      kvRow(t("id.fingerprint"), idt.fingerprint),
+    ];
+    if (withSecret) {
+      rows.push(h("span", { class: "label !text-amber-300" }, "⚠ " + t("id.secret")),
+        h("output", { class: "out !text-amber-300" }, idt.secret),
+        h("button", {
+          class: "btn-ghost", type: "button",
+          onClick: () => download(enc.encode(
+            `# easylock identity: KEEP THIS FILE SECRET and back it up.\n# public key: ${idt.public}\n${idt.secret}\n`), "identity.key"),
+        }, icon(ICONS.download, "h-3.5 w-3.5"), t("id.download")),
+        h("p", { class: "font-mono text-[11px] text-slate-500" }, "$ easylock lock report.pdf -r elkpub1…   ·   $ easylock unlock report.pdf.elk -i identity.key"));
+    }
+    view.replaceChildren(...rows);
+  };
+  const gen = button("id.new", null, ICONS.key);
+  gen.onclick = busy(gen, async () => {
+    const idt = api.identityGenerate();
+    pushClip("key", "easylock public key", idt.public);
+    show(idt, true);
+    status(`${t("msg.done")} ✓`, "ok");
+  });
+  const paste = textarea({ placeholder: "ELK-SECRET-KEY-1…", rows: 2 });
+  paste.addEventListener("input", () => {
+    if (!paste.value.trim()) return;
+    try { show(api.identityPublic(paste.value), false); } catch (e) { view.replaceChildren(badge(false, String(e.message || e))); }
+  });
+  return toolView("asym.identity",
+    card(actions(gen), view, h("div", { class: "border-t border-obsidian-700 pt-4" }, field("id.derive", paste))));
 }
 
 function textTool() {
@@ -708,6 +772,7 @@ export const TOOLS = {
   "sym.text": textTool,
   "sym.aes": () => rawAead("sym.aes", "aes-256-gcm"),
   "sym.chacha": () => rawAead("sym.chacha", "chacha20-poly1305"),
+  "asym.identity": identityTool,
   "asym.ed25519": ed25519Tool,
   "asym.x25519": x25519Tool,
   "asym.kyber": kyberTool,

@@ -40,6 +40,9 @@ cargo install --git https://github.com/zlixas/easylock easylock-cli
 easylock --lang tr tui                     # tam ekran terminal arayüzü
 easylock lock vergiler.pdf                 # → vergiler.pdf.elk (parola sorar)
 easylock unlock vergiler.pdf.elk
+easylock lock ~/Fotograflar --shred        # tüm klasör → tek .elk, orijinaller silinir
+easylock identity                          # anahtar çiftiniz (X25519 + ML-KEM-768)
+easylock lock rapor.pdf -r elkpub1…        # ortak parola olmadan birine şifrele
 echo -n abc | easylock hash -a blake3
 easylock password -n 3 -l 24 --symbols
 easylock --lang tr --help
@@ -62,7 +65,7 @@ easylock --lang tr --help
 
 ## Dört arayüz
 
-- **🌐 Web sitesi:** 5 kategoride 19 araç. Dosya ve mesaj şifreleme, canlı özet, sağlama doğrulama,
+- **🌐 Web sitesi:** 5 kategoride 20 araç. Dosya ve mesaj şifreleme, canlı özet, sağlama doğrulama,
   Argon2 ile özetleme ve doğrulama, X25519 anahtar değişimi gösterimi, JWT inceleyici, parola gücü analizi, UUID/PIN üreteci ve
   daha fazlası. <kbd>Ctrl</kbd>+<kbd>K</kbd> komut paletini açar, telefonda da rahat kullanılır.
 - **⌨️ Terminal arayüzü (`easylock tui`):** 9 araç var. <kbd>F2</kbd> dili değiştirir, <kbd>F5</kbd> kopyalar, <kbd>F1</kbd> yardımı açar.

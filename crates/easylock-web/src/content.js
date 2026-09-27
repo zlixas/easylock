@@ -15,9 +15,9 @@ export const META = {
     cat: "sym", emoji: "📦", spec: ".elk · Argon2id + AEAD",
     name: { en: "Encrypt a file", tr: "Dosya şifrele", es: "Cifrar un archivo" },
     summary: {
-      en: "Lock any file with a password. The result opens with the easylock CLI, TUI and desktop app too.",
-      tr: "Herhangi bir dosyayı parolayla kilitleyin. Sonuç easylock CLI, TUI ve masaüstü uygulamasıyla da açılır.",
-      es: "Bloquee cualquier archivo con una contraseña. El resultado también se abre con la CLI, la TUI y la app de escritorio.",
+      en: "Lock any file with a password, with someone's public key, or both. The result opens with the easylock CLI and desktop app too.",
+      tr: "Herhangi bir dosyayı parolayla, birinin açık anahtarıyla veya ikisiyle kilitleyin. Sonuç easylock CLI ve masaüstü uygulamasıyla da açılır.",
+      es: "Bloquee cualquier archivo con contraseña, con la clave pública de alguien o con ambas. También se abre con la CLI y la app de escritorio.",
     },
     keywords: "file lock password elk dosya kilit archivo",
     learn: {
@@ -27,9 +27,9 @@ export const META = {
         es: "Cifrado de archivos basado en contraseña: su contraseña se convierte en una clave de 256 bits y el archivo se cifra y autentica con un cifrado AEAD.",
       },
       how: {
-        en: "A random 16-byte salt + Argon2id (64 MiB, 3 passes) derive the key. The file is split into 256 KiB chunks; each chunk gets its own nonce and is sealed with AES-256-GCM or ChaCha20-Poly1305. The chunk index and a 'last chunk' flag are authenticated, so chunks cannot be reordered, dropped or truncated.",
-        tr: "Rastgele 16 baytlık bir tuz + Argon2id (64 MiB, 3 geçiş) anahtarı türetir. Dosya 256 KiB'lık parçalara bölünür; her parça kendi nonce'u ile AES-256-GCM veya ChaCha20-Poly1305 kullanılarak mühürlenir. Parça sırası ve 'son parça' bayrağı doğrulandığı için parçalar yer değiştiremez, silinemez veya kesilemez.",
-        es: "Una sal aleatoria de 16 bytes + Argon2id (64 MiB, 3 pasadas) derivan la clave. El archivo se divide en bloques de 256 KiB; cada bloque tiene su propio nonce y se sella con AES-256-GCM o ChaCha20-Poly1305. El índice del bloque y una marca de 'último bloque' se autentican, así que no se pueden reordenar, eliminar ni truncar.",
+        en: "A random 256-bit file key encrypts the data in 256 KiB chunks (AES-256-GCM or ChaCha20-Poly1305, one nonce per chunk; the chunk index and a 'last chunk' flag are authenticated, so nothing can be reordered, dropped or truncated). The file key itself is locked in 'key slots': one per password (Argon2id, 64 MiB) and one per public key (X25519 + ML-KEM-768). An HMAC over the header stops anyone from swapping slots.",
+        tr: "Rastgele 256 bitlik bir dosya anahtarı veriyi 256 KiB'lık parçalar halinde şifreler (AES-256-GCM veya ChaCha20-Poly1305, parça başına bir nonce; parça sırası ve 'son parça' bayrağı doğrulanır, böylece hiçbir şey yer değiştiremez, silinemez veya kesilemez). Dosya anahtarı 'anahtar yuvalarına' kilitlenir: her parola için bir yuva (Argon2id, 64 MiB), her açık anahtar için bir yuva (X25519 + ML-KEM-768). Başlık üzerindeki HMAC, yuvaların değiştirilmesini engeller.",
+        es: "Una clave de archivo aleatoria de 256 bits cifra los datos en bloques de 256 KiB (AES-256-GCM o ChaCha20-Poly1305, un nonce por bloque; el índice y una marca de 'último bloque' se autentican, así que nada se puede reordenar, eliminar ni truncar). La clave del archivo se guarda en 'ranuras': una por contraseña (Argon2id, 64 MiB) y una por clave pública (X25519 + ML-KEM-768). Un HMAC sobre la cabecera impide cambiar las ranuras.",
       },
       when: {
         en: "Backing up documents to the cloud, sending a file over an untrusted channel, keeping a private archive on a USB stick.",
@@ -141,6 +141,38 @@ export const META = {
   },
 
   /* ----------------------------------------------------------- asymmetric */
+  "asym.identity": {
+    cat: "asym", emoji: "🪪", spec: "X25519 + ML-KEM-768 hybrid",
+    name: { en: "Key pair for file sharing", tr: "Dosya paylaşımı için anahtar çifti", es: "Par de claves para compartir archivos" },
+    summary: {
+      en: "Create your easylock identity. Others encrypt files to your public key; only your secret key opens them. No shared password needed.",
+      tr: "easylock kimliğinizi oluşturun. Başkaları dosyaları açık anahtarınıza şifreler; onları yalnızca gizli anahtarınız açar. Ortak parola gerekmez.",
+      es: "Cree su identidad de easylock. Otros cifran archivos para su clave pública y solo su clave secreta los abre. Sin contraseña compartida.",
+    },
+    keywords: "identity public key recipient age share kimlik açık anahtar alıcı identidad clave pública",
+    learn: {
+      what: {
+        en: "A public/secret key pair for encrypting files to people, like age or PGP but post-quantum by default.",
+        tr: "Dosyaları kişilere şifrelemek için bir açık/gizli anahtar çifti; age veya PGP gibi ama varsayılan olarak kuantum sonrası.",
+        es: "Un par de claves pública/secreta para cifrar archivos para personas, como age o PGP pero post-cuántico por defecto.",
+      },
+      how: {
+        en: "Each encrypted file gets a fresh ephemeral X25519 key and a fresh ML-KEM-768 encapsulation. Both shared secrets go through HKDF to make the key that wraps the file key, so an attacker must break BOTH X25519 and ML-KEM.",
+        tr: "Her şifreli dosya yeni bir geçici X25519 anahtarı ve yeni bir ML-KEM-768 kapsüllemesi alır. İki ortak sır da HKDF'den geçerek dosya anahtarını saran anahtarı oluşturur; saldırganın HEM X25519'u HEM ML-KEM'i kırması gerekir.",
+        es: "Cada archivo cifrado recibe una clave X25519 efímera nueva y una encapsulación ML-KEM-768 nueva. Ambos secretos pasan por HKDF para formar la clave que envuelve la clave del archivo; un atacante debe romper X25519 Y ML-KEM.",
+      },
+      when: {
+        en: "Sending files to colleagues, encrypted backups that only your key can open, sharing with several people at once (one file, many recipients).",
+        tr: "Meslektaşlara dosya göndermek, yalnızca sizin anahtarınızın açabileceği şifreli yedekler, birden çok kişiyle aynı anda paylaşmak (tek dosya, çok alıcı).",
+        es: "Enviar archivos a colegas, copias cifradas que solo su clave abre, compartir con varias personas a la vez (un archivo, muchos destinatarios).",
+      },
+      careful: {
+        en: "Lose the secret key and every file encrypted to it is lost. Verify a public key's fingerprint through a second channel before trusting it.",
+        tr: "Gizli anahtarı kaybederseniz ona şifrelenen her dosya da kaybolur. Bir açık anahtara güvenmeden önce parmak izini ikinci bir kanaldan doğrulayın.",
+        es: "Si pierde la clave secreta, pierde todos los archivos cifrados para ella. Verifique la huella de una clave pública por otro canal antes de confiar en ella.",
+      },
+    },
+  },
   "asym.ed25519": {
     cat: "asym", emoji: "✍️", spec: "RFC 8032 · EdDSA",
     name: { en: "Sign & verify (Ed25519)", tr: "İmzala & doğrula (Ed25519)", es: "Firmar y verificar (Ed25519)" },
@@ -634,6 +666,7 @@ export const TOOL_IDS = Object.keys(META);
 /** Goal cards on the home page: [i18n key, tool id, emoji]. */
 export const GOALS = [
   ["goal.file", "sym.file", "📦"],
+  ["goal.share", "asym.identity", "🪪"],
   ["goal.text", "sym.text", "✉️"],
   ["goal.checksum", "hash.verify", "✅"],
   ["goal.store", "hash.argon2", "🧂"],

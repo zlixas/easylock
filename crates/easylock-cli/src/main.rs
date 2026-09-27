@@ -1,6 +1,6 @@
 //! `easylock` — command-line interface and terminal UI.
 //!
-//! Subcommands: `lock`, `unlock`, `hash`, `encode`, `decode`, `encrypt`, `decrypt`, `hmac`, `kdf`,
+//! Subcommands: `lock`, `unlock`, `inspect`, `identity`, `hash`, `encode`, `decode`, `encrypt`, `decrypt`, `hmac`, `kdf`,
 //! `password`, `keygen`, `sign`, `verify`, `info`, and `tui` (full-screen UI).
 //! Help, messages and the TUI are available in English, Turkish and Spanish,
 //! chosen with `--lang en|tr|es` or the system locale.
@@ -9,6 +9,7 @@ mod commands;
 mod help;
 mod i18n;
 mod io;
+mod progress;
 mod tui;
 
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -40,10 +41,14 @@ enum Command {
     Encrypt(commands::crypt::Args),
     /// Decrypt data produced by `encrypt`.
     Decrypt(commands::crypt::Args),
-    /// Encrypt a file with a password (`.elk`, works with the app and website).
+    /// Encrypt files or folders to a password and/or public keys (`.elk`).
     Lock(commands::lock::LockArgs),
-    /// Decrypt a `.elk` file.
+    /// Decrypt `.elk` files and folders.
     Unlock(commands::lock::UnlockArgs),
+    /// Show what an `.elk` file contains and how it can be unlocked.
+    Inspect(commands::lock::InspectArgs),
+    /// Create (or show) your public-key identity.
+    Identity(commands::identity::Args),
     /// Keyed message authentication code.
     Hmac(commands::hmac::Args),
     /// Password hashing / key derivation (Argon2id, PBKDF2).
@@ -96,6 +101,8 @@ fn main() -> ExitCode {
         Command::Decrypt(a) => commands::crypt::run(&a, lang, Direction::Decrypt),
         Command::Lock(a) => commands::lock::run_lock(&a, lang),
         Command::Unlock(a) => commands::lock::run_unlock(&a, lang),
+        Command::Inspect(a) => commands::lock::run_inspect(&a, lang),
+        Command::Identity(a) => commands::identity::run(&a, lang),
         Command::Hmac(a) => commands::hmac::run(&a, lang),
         Command::Kdf(a) => commands::kdf::run(&a, lang),
         Command::Password(a) => commands::password::run(&a, lang),

@@ -2,6 +2,7 @@ pub mod crypt;
 pub mod encode;
 pub mod hash;
 pub mod hmac;
+pub mod identity;
 pub mod info;
 pub mod kdf;
 pub mod keygen;

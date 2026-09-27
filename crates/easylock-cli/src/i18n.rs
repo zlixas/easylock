@@ -136,6 +136,20 @@ pub enum Msg {
     PasswordMismatch,
     PasswordsDiffer,
     PasswordEmpty,
+    OutputExists(String),
+    NeedIdentity,
+    IdentityExists(String),
+    IdentityMissing(String),
+    BadRecipient(String),
+    OneOutputOnly,
+    StdinNeedsKey,
+    FolderToStdout,
+    Shredded(String),
+    ShredSkipped(String),
+    ArchiveSummary { files: u64, dirs: u64, size: String },
+    SlotsSummary { recipients: usize, password: bool },
+    SomeFailed(usize),
+    SkippedSpecial(u64),
 }
 
 impl Msg {
@@ -276,6 +290,88 @@ impl Msg {
                 "{}: {e}",
                 lang.pick(["terminal error", "terminal hatası", "error de terminal"])
             ),
+            Msg::OutputExists(path) => match lang {
+                Lang::En => format!("{path} already exists (use --force to replace it)"),
+                Lang::Tr => format!("{path} zaten var (değiştirmek için --force kullanın)"),
+                Lang::Es => format!("{path} ya existe (use --force para reemplazarlo)"),
+            },
+            Msg::NeedIdentity => p([
+                "this file is encrypted to a public key: pass your identity with -i FILE (create one with `easylock identity`)",
+                "bu dosya bir açık anahtara şifrelenmiş: kimliğinizi -i DOSYA ile verin (`easylock identity` ile oluşturabilirsiniz)",
+                "este archivo está cifrado para una clave pública: indique su identidad con -i ARCHIVO (créela con `easylock identity`)",
+            ]),
+            Msg::IdentityExists(path) => match lang {
+                Lang::En => format!("an identity already exists at {path} (use --force to replace it — the old key will be lost)"),
+                Lang::Tr => format!("{path} konumunda zaten bir kimlik var (değiştirmek için --force; eski anahtar kaybolur)"),
+                Lang::Es => format!("ya existe una identidad en {path} (use --force para reemplazarla; la clave anterior se perderá)"),
+            },
+            Msg::IdentityMissing(path) => match lang {
+                Lang::En => format!("no identity found at {path} — create one with `easylock identity`"),
+                Lang::Tr => format!("{path} konumunda kimlik yok — `easylock identity` ile oluşturun"),
+                Lang::Es => format!("no hay identidad en {path}: créela con `easylock identity`"),
+            },
+            Msg::BadRecipient(r) => format!(
+                "{}: {r}",
+                lang.pick([
+                    "not a valid recipient (expected an elkpub1… key or a file containing one)",
+                    "geçerli bir alıcı değil (elkpub1… anahtarı veya onu içeren bir dosya bekleniyor)",
+                    "destinatario no válido (se espera una clave elkpub1… o un archivo que la contenga)",
+                ])
+            ),
+            Msg::OneOutputOnly => p([
+                "-o/--output can only be used with a single input",
+                "-o/--output yalnızca tek bir girdiyle kullanılabilir",
+                "-o/--output solo se puede usar con una única entrada",
+            ]),
+            Msg::StdinNeedsKey => p([
+                "when reading from stdin, pass -r/--recipient, --password or EASYLOCK_PASSWORD",
+                "stdin'den okurken -r/--recipient, --password veya EASYLOCK_PASSWORD verin",
+                "al leer de stdin, indique -r/--recipient, --password o EASYLOCK_PASSWORD",
+            ]),
+            Msg::FolderToStdout => p([
+                "an encrypted folder can't be written to stdout; use -o DIR or --list",
+                "şifreli bir klasör stdout'a yazılamaz; -o KLASÖR veya --list kullanın",
+                "una carpeta cifrada no se puede escribir en stdout; use -o DIR o --list",
+            ]),
+            Msg::Shredded(path) => match lang {
+                Lang::En => format!("original overwritten and removed: {path} (on SSDs and copy-on-write filesystems old blocks may survive)"),
+                Lang::Tr => format!("orijinalin üzerine yazıldı ve silindi: {path} (SSD'lerde ve yazarken-kopyala dosya sistemlerinde eski bloklar kalabilir)"),
+                Lang::Es => format!("original sobrescrito y eliminado: {path} (en SSD y sistemas copy-on-write pueden quedar bloques antiguos)"),
+            },
+            Msg::ShredSkipped(path) => match lang {
+                Lang::En => format!("{path} contains symlinks or special files that were not archived — the original was kept"),
+                Lang::Tr => format!("{path} arşivlenmeyen sembolik bağlar veya özel dosyalar içeriyor — orijinal korundu"),
+                Lang::Es => format!("{path} contiene enlaces simbólicos o archivos especiales no archivados; se conservó el original"),
+            },
+            Msg::ArchiveSummary { files, dirs, size } => match lang {
+                Lang::En => format!("{files} files, {dirs} folders, {size}"),
+                Lang::Tr => format!("{files} dosya, {dirs} klasör, {size}"),
+                Lang::Es => format!("{files} archivos, {dirs} carpetas, {size}"),
+            },
+            Msg::SlotsSummary { recipients, password } => {
+                let mut parts = Vec::new();
+                if *recipients > 0 {
+                    parts.push(match lang {
+                        Lang::En => format!("{recipients} recipient(s)"),
+                        Lang::Tr => format!("{recipients} alıcı"),
+                        Lang::Es => format!("{recipients} destinatario(s)"),
+                    });
+                }
+                if *password {
+                    parts.push(p(["password", "parola", "contraseña"]));
+                }
+                format!("{} {}", p(["unlockable by:", "açabilen:", "se abre con:"]), parts.join(" + "))
+            }
+            Msg::SkippedSpecial(n) => match lang {
+                Lang::En => format!("warning: {n} symlink(s) or special file(s) were not included"),
+                Lang::Tr => format!("uyarı: {n} sembolik bağ veya özel dosya dahil edilmedi"),
+                Lang::Es => format!("aviso: no se incluyeron {n} enlace(s) simbólico(s) o archivo(s) especial(es)"),
+            },
+            Msg::SomeFailed(n) => match lang {
+                Lang::En => format!("{n} item(s) failed"),
+                Lang::Tr => format!("{n} öğe başarısız oldu"),
+                Lang::Es => format!("{n} elemento(s) fallaron"),
+            },
         }
     }
 }

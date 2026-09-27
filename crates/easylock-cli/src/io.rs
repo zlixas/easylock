@@ -39,12 +39,53 @@ pub fn write_output(path: &Option<PathBuf>, data: &[u8]) -> Result<(), CliError>
     }
 }
 
-/// Fill `buf` with cryptographically secure random bytes from the OS.
+/// Fill `buf` with cryptographically secure random bytes from the OS
+/// (`getrandom(2)` / `SecRandomCopyBytes` / `BCryptGenRandom`).
 pub fn os_random(buf: &mut [u8]) -> Result<(), CliError> {
-    // `/dev/urandom` is the portable choice on macOS and Linux; it never blocks
-    // after early boot and is a CSPRNG on both.
-    let mut f =
-        File::open("/dev/urandom").map_err(|e| CliError::new(Msg::RandomError(e.to_string())))?;
-    f.read_exact(buf)
-        .map_err(|e| CliError::new(Msg::RandomError(e.to_string())))
+    getrandom::getrandom(buf).map_err(|e| CliError::new(Msg::RandomError(e.to_string())))
+}
+
+/// Infallible RNG closure for core APIs; aborts if the OS RNG is unavailable,
+/// which is the only safe reaction for a crypto tool.
+pub fn rng() -> impl FnMut(&mut [u8]) {
+    |b: &mut [u8]| os_random(b).expect("the operating system's random number generator failed")
+}
+
+/// Read a secret from the terminal without echo. Works even when stdin is a pipe
+/// (the terminal is opened directly).
+pub fn prompt_secret(label: &str) -> Result<String, CliError> {
+    use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+    use ratatui::crossterm::terminal;
+
+    eprint!("{label}: ");
+    let _ = std::io::stderr().flush();
+    terminal::enable_raw_mode().map_err(|e| CliError::new(Msg::TerminalError(e.to_string())))?;
+    let mut secret = String::new();
+    let res = loop {
+        match event::read() {
+            Ok(Event::Key(k)) if k.kind == KeyEventKind::Press => match k.code {
+                KeyCode::Enter => break Ok(()),
+                KeyCode::Char('c') if k.modifiers.contains(KeyModifiers::CONTROL) => {
+                    break Err(CliError::new(Msg::TerminalError("cancelled".into())));
+                }
+                KeyCode::Char(c) => secret.push(c),
+                KeyCode::Backspace => {
+                    secret.pop();
+                }
+                _ => {}
+            },
+            Ok(_) => {}
+            Err(e) => break Err(CliError::new(Msg::TerminalError(e.to_string()))),
+        }
+    };
+    let _ = terminal::disable_raw_mode();
+    eprintln!();
+    res.map(|()| secret)
+}
+
+/// Best-effort wipe of a `String`'s heap buffer.
+pub fn wipe(s: &mut String) {
+    use easylock_core::secure::Zeroize;
+    let mut bytes = std::mem::take(s).into_bytes();
+    bytes.zeroize();
 }
