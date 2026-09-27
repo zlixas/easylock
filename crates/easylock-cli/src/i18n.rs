@@ -1,5 +1,7 @@
-//! Minimal internationalization: an enum of message keys resolved to English or
-//! Turkish. No runtime dependency; the table is a `match`.
+//! Internationalization for the CLI and TUI: English, Turkish, Spanish.
+//!
+//! No runtime dependency — every string is a `[en, tr, es]` triple resolved by
+//! [`Lang::pick`].
 
 use std::fmt;
 
@@ -8,28 +10,36 @@ use std::fmt;
 pub enum Lang {
     En,
     Tr,
+    Es,
 }
 
 impl Lang {
+    /// All languages, in toggle order.
+    pub const ALL: [Lang; 3] = [Lang::En, Lang::Tr, Lang::Es];
+
     /// Parse a `--lang` value.
     pub fn parse(s: &str) -> Option<Self> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "en" | "english" | "en-us" | "en_us" => Some(Lang::En),
-            "tr" | "turkish" | "türkçe" | "turkce" | "tr-tr" | "tr_tr" => Some(Lang::Tr),
+        match s.trim().to_ascii_lowercase().replace('_', "-").as_str() {
+            "en" | "english" | "en-us" | "en-gb" => Some(Lang::En),
+            "tr" | "turkish" | "türkçe" | "turkce" | "tr-tr" => Some(Lang::Tr),
+            "es" | "spanish" | "español" | "espanol" | "es-es" | "es-mx" => Some(Lang::Es),
             _ => None,
         }
     }
 
     /// Detect from the POSIX locale environment, defaulting to English.
     ///
-    /// Checks `LC_ALL`, `LC_MESSAGES`, `LANG`, then `LANGUAGE` in that order; a
-    /// value like `tr_TR.UTF-8` (or `tr`) selects Turkish.
+    /// Checks `LC_ALL`, `LC_MESSAGES`, `LANG`, then `LANGUAGE`; a value like
+    /// `tr_TR.UTF-8` selects Turkish, `es_ES.UTF-8` Spanish.
     pub fn detect() -> Self {
         for var in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
             if let Ok(v) = std::env::var(var) {
                 let lower = v.to_ascii_lowercase();
                 if lower.starts_with("tr") {
                     return Lang::Tr;
+                }
+                if lower.starts_with("es") {
+                    return Lang::Es;
                 }
                 if lower.starts_with("en") {
                     return Lang::En;
@@ -39,18 +49,44 @@ impl Lang {
         Lang::En
     }
 
-    /// Resolve the UI language: an explicit `--lang` value wins, otherwise the
-    /// system locale, otherwise English. An unrecognized `--lang` value falls
-    /// back to detection (clap validates the flag separately and will report it).
+    /// Explicit `--lang` wins, then the system locale, then English.
     pub fn resolve(lang_flag: Option<&str>) -> Self {
         lang_flag.and_then(Lang::parse).unwrap_or_else(Lang::detect)
     }
 
-    /// The locale's own name, for `--help` footers.
+    /// The language's own name.
     pub fn endonym(self) -> &'static str {
         match self {
             Lang::En => "English",
             Lang::Tr => "Türkçe",
+            Lang::Es => "Español",
+        }
+    }
+
+    /// Short code (`en` / `tr` / `es`).
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::En => "en",
+            Lang::Tr => "tr",
+            Lang::Es => "es",
+        }
+    }
+
+    /// Next language in toggle order (used by the TUI).
+    pub fn next(self) -> Self {
+        match self {
+            Lang::En => Lang::Tr,
+            Lang::Tr => Lang::Es,
+            Lang::Es => Lang::En,
+        }
+    }
+
+    /// Select the string for this language from an `[en, tr, es]` triple.
+    pub fn pick<T: Copy>(self, [en, tr, es]: [T; 3]) -> T {
+        match self {
+            Lang::En => en,
+            Lang::Tr => tr,
+            Lang::Es => es,
         }
     }
 }
@@ -78,6 +114,7 @@ pub enum Msg {
     UnknownAlgorithm(String),
     UnknownTransform(String),
     UnknownCipher(String),
+    UnknownKeyKind(String),
     KeyRequired,
     BadKeyLength { expected: usize, got: usize },
     NonceRequired { bytes: usize },
@@ -90,83 +127,155 @@ pub enum Msg {
     GeneratedNonce(String),
     Encrypted { target: String, cipher: String },
     Decrypted { target: String, cipher: String },
+    Crypto(String),
+    BadPasswordSpec,
+    SignatureValid,
+    SignatureInvalid,
+    TerminalError(String),
+    PasswordMatches,
+    PasswordMismatch,
+    PasswordsDiffer,
+    PasswordEmpty,
 }
 
 impl Msg {
+    #[allow(clippy::too_many_lines)] // a flat three-language table
     pub fn text(&self, lang: Lang) -> String {
-        match (lang, self) {
-            (Lang::En, Msg::UnknownAlgorithm(a)) => format!("unknown hash algorithm: {a}"),
-            (Lang::Tr, Msg::UnknownAlgorithm(a)) => format!("bilinmeyen özet algoritması: {a}"),
-
-            (Lang::En, Msg::UnknownTransform(t)) => format!("unknown transform: {t}"),
-            (Lang::Tr, Msg::UnknownTransform(t)) => format!("bilinmeyen dönüşüm: {t}"),
-
-            (Lang::En, Msg::UnknownCipher(c)) => format!("unknown cipher: {c}"),
-            (Lang::Tr, Msg::UnknownCipher(c)) => format!("bilinmeyen şifre: {c}"),
-
-            (Lang::En, Msg::KeyRequired) => {
-                "a key is required (--key <hex> or --key-file <path>)".into()
-            }
-            (Lang::Tr, Msg::KeyRequired) => {
-                "bir anahtar gerekli (--key <hex> veya --key-file <yol>)".into()
-            }
-
-            (Lang::En, Msg::BadKeyLength { expected, got }) => {
-                format!("key must be {expected} bytes, got {got}")
-            }
-            (Lang::Tr, Msg::BadKeyLength { expected, got }) => {
-                format!("anahtar {expected} bayt olmalı, {got} alındı")
-            }
-
-            (Lang::En, Msg::NonceRequired { bytes }) => {
-                format!("a {bytes}-byte nonce is required for decryption (--nonce <hex>)")
-            }
-            (Lang::Tr, Msg::NonceRequired { bytes }) => {
-                format!("şifre çözme için {bytes} baytlık bir nonce gerekli (--nonce <hex>)")
-            }
-
-            (Lang::En, Msg::BadNonceLength { expected, got }) => {
-                format!("nonce must be {expected} bytes, got {got}")
-            }
-            (Lang::Tr, Msg::BadNonceLength { expected, got }) => {
-                format!("nonce {expected} bayt olmalı, {got} alındı")
-            }
-
-            (Lang::En, Msg::AuthenticationFailed) => {
-                "authentication failed: wrong key/nonce or the data was modified".into()
-            }
-            (Lang::Tr, Msg::AuthenticationFailed) => {
-                "kimlik doğrulama başarısız: yanlış anahtar/nonce ya da veri değiştirilmiş".into()
-            }
-
-            (Lang::En, Msg::InvalidInputEncoding(s)) => format!("invalid {s} input"),
-            (Lang::Tr, Msg::InvalidInputEncoding(s)) => format!("geçersiz {s} girdisi"),
-
-            (Lang::En, Msg::ReadError(e)) => format!("read error: {e}"),
-            (Lang::Tr, Msg::ReadError(e)) => format!("okuma hatası: {e}"),
-
-            (Lang::En, Msg::WriteError(e)) => format!("write error: {e}"),
-            (Lang::Tr, Msg::WriteError(e)) => format!("yazma hatası: {e}"),
-
-            (Lang::En, Msg::RandomError(e)) => format!("could not read system randomness: {e}"),
-            (Lang::Tr, Msg::RandomError(e)) => format!("sistem rastgeleliği okunamadı: {e}"),
-
-            (Lang::En, Msg::GeneratedNonce(n)) => format!("generated nonce (hex): {n}"),
-            (Lang::Tr, Msg::GeneratedNonce(n)) => format!("üretilen nonce (hex): {n}"),
-
-            (Lang::En, Msg::Encrypted { target, cipher }) => {
-                format!("encrypted: {target} (used {cipher})")
-            }
-            (Lang::Tr, Msg::Encrypted { target, cipher }) => {
-                format!("şifrelendi: {target} ({cipher} kullanıldı)")
-            }
-
-            (Lang::En, Msg::Decrypted { target, cipher }) => {
-                format!("decrypted: {target} (used {cipher})")
-            }
-            (Lang::Tr, Msg::Decrypted { target, cipher }) => {
-                format!("şifre çözüldü: {target} ({cipher} kullanıldı)")
-            }
+        let p = |t: [&str; 3]| lang.pick(t).to_string();
+        match self {
+            Msg::UnknownAlgorithm(a) => format!(
+                "{}: {a}",
+                lang.pick([
+                    "unknown hash algorithm",
+                    "bilinmeyen özet algoritması",
+                    "algoritmo de hash desconocido"
+                ])
+            ),
+            Msg::UnknownTransform(t) => format!(
+                "{}: {t}",
+                lang.pick([
+                    "unknown transform",
+                    "bilinmeyen dönüşüm",
+                    "transformación desconocida"
+                ])
+            ),
+            Msg::UnknownCipher(c) => format!(
+                "{}: {c}",
+                lang.pick(["unknown cipher", "bilinmeyen şifre", "cifrado desconocido"])
+            ),
+            Msg::UnknownKeyKind(k) => format!(
+                "{}: {k} (ed25519, x25519, mlkem512, mlkem768, mlkem1024, rsa2048)",
+                lang.pick([
+                    "unknown key type",
+                    "bilinmeyen anahtar türü",
+                    "tipo de clave desconocido"
+                ])
+            ),
+            Msg::KeyRequired => p([
+                "a key is required (--key <hex> or --key-file <path>)",
+                "bir anahtar gerekli (--key <hex> veya --key-file <yol>)",
+                "se requiere una clave (--key <hex> o --key-file <ruta>)",
+            ]),
+            Msg::BadKeyLength { expected, got } => match lang {
+                Lang::En => format!("key must be {expected} bytes, got {got}"),
+                Lang::Tr => format!("anahtar {expected} bayt olmalı, {got} alındı"),
+                Lang::Es => format!("la clave debe tener {expected} bytes, se recibieron {got}"),
+            },
+            Msg::NonceRequired { bytes } => match lang {
+                Lang::En => {
+                    format!("a {bytes}-byte nonce is required for decryption (--nonce <hex>)")
+                }
+                Lang::Tr => {
+                    format!("şifre çözme için {bytes} baytlık bir nonce gerekli (--nonce <hex>)")
+                }
+                Lang::Es => {
+                    format!("se requiere un nonce de {bytes} bytes para descifrar (--nonce <hex>)")
+                }
+            },
+            Msg::BadNonceLength { expected, got } => match lang {
+                Lang::En => format!("nonce must be {expected} bytes, got {got}"),
+                Lang::Tr => format!("nonce {expected} bayt olmalı, {got} alındı"),
+                Lang::Es => format!("el nonce debe tener {expected} bytes, se recibieron {got}"),
+            },
+            Msg::AuthenticationFailed => p([
+                "authentication failed: wrong key/nonce or the data was modified",
+                "kimlik doğrulama başarısız: yanlış anahtar/nonce ya da veri değiştirilmiş",
+                "autenticación fallida: clave/nonce incorrectos o los datos fueron modificados",
+            ]),
+            Msg::InvalidInputEncoding(s) => match lang {
+                Lang::En => format!("invalid {s} input"),
+                Lang::Tr => format!("geçersiz {s} girdisi"),
+                Lang::Es => format!("entrada {s} no válida"),
+            },
+            Msg::ReadError(e) => format!(
+                "{}: {e}",
+                lang.pick(["read error", "okuma hatası", "error de lectura"])
+            ),
+            Msg::WriteError(e) => format!(
+                "{}: {e}",
+                lang.pick(["write error", "yazma hatası", "error de escritura"])
+            ),
+            Msg::RandomError(e) => format!(
+                "{}: {e}",
+                lang.pick([
+                    "could not read system randomness",
+                    "sistem rastgeleliği okunamadı",
+                    "no se pudo leer la aleatoriedad del sistema",
+                ])
+            ),
+            Msg::GeneratedNonce(n) => format!(
+                "{}: {n}",
+                lang.pick([
+                    "generated nonce (hex)",
+                    "üretilen nonce (hex)",
+                    "nonce generado (hex)"
+                ])
+            ),
+            Msg::Encrypted { target, cipher } => match lang {
+                Lang::En => format!("encrypted: {target} (used {cipher})"),
+                Lang::Tr => format!("şifrelendi: {target} ({cipher} kullanıldı)"),
+                Lang::Es => format!("cifrado: {target} (se usó {cipher})"),
+            },
+            Msg::Decrypted { target, cipher } => match lang {
+                Lang::En => format!("decrypted: {target} (used {cipher})"),
+                Lang::Tr => format!("şifre çözüldü: {target} ({cipher} kullanıldı)"),
+                Lang::Es => format!("descifrado: {target} (se usó {cipher})"),
+            },
+            Msg::Crypto(e) => format!(
+                "{}: {e}",
+                lang.pick(["crypto error", "kripto hatası", "error criptográfico"])
+            ),
+            Msg::BadPasswordSpec => p([
+                "choose at least one character class and a length between 4 and 256",
+                "en az bir karakter sınıfı ve 4–256 arası bir uzunluk seçin",
+                "elija al menos una clase de caracteres y una longitud entre 4 y 256",
+            ]),
+            Msg::SignatureValid => p(["signature VALID", "imza GEÇERLİ", "firma VÁLIDA"]),
+            Msg::SignatureInvalid => p(["signature INVALID", "imza GEÇERSİZ", "firma NO VÁLIDA"]),
+            Msg::PasswordMatches => p([
+                "password MATCHES",
+                "parola EŞLEŞİYOR",
+                "la contraseña COINCIDE",
+            ]),
+            Msg::PasswordMismatch => p([
+                "password does NOT match",
+                "parola EŞLEŞMİYOR",
+                "la contraseña NO coincide",
+            ]),
+            Msg::PasswordsDiffer => p([
+                "the passwords do not match",
+                "parolalar eşleşmiyor",
+                "las contraseñas no coinciden",
+            ]),
+            Msg::PasswordEmpty => p([
+                "the password is empty",
+                "parola boş",
+                "la contraseña está vacía",
+            ]),
+            Msg::TerminalError(e) => format!(
+                "{}: {e}",
+                lang.pick(["terminal error", "terminal hatası", "error de terminal"])
+            ),
         }
     }
 }
@@ -181,11 +290,13 @@ impl CliError {
     pub fn new(msg: Msg) -> Self {
         Self { msg }
     }
+    pub fn crypto(e: impl fmt::Display) -> Self {
+        Self::new(Msg::Crypto(e.to_string()))
+    }
 }
 
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Display uses English; `main` re-renders in the selected language.
         write!(f, "{}", self.msg.text(Lang::En))
     }
 }
@@ -200,12 +311,21 @@ mod tests {
     fn parse_and_detect() {
         assert_eq!(Lang::parse("TR"), Some(Lang::Tr));
         assert_eq!(Lang::parse("en-US"), Some(Lang::En));
+        assert_eq!(Lang::parse("es_ES"), Some(Lang::Es));
         assert_eq!(Lang::parse("de"), None);
     }
 
     #[test]
-    fn turkish_differs_from_english() {
+    fn all_languages_differ() {
         let m = Msg::AuthenticationFailed;
-        assert_ne!(m.text(Lang::En), m.text(Lang::Tr));
+        let [en, tr, es] = Lang::ALL.map(|l| m.text(l));
+        assert_ne!(en, tr);
+        assert_ne!(en, es);
+        assert_ne!(tr, es);
+    }
+
+    #[test]
+    fn toggle_cycles_through_all() {
+        assert_eq!(Lang::En.next().next().next(), Lang::En);
     }
 }

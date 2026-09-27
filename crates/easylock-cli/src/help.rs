@@ -1,100 +1,276 @@
-//! Runtime localization of clap's generated `--help` / `--version` output.
+//! Runtime localisation of clap's generated `--help` / `--version` output.
 //!
-//! The command *structure* still comes from the `#[derive(Parser)]` types in
-//! `main.rs`. Here we:
-//!
-//! 1. replace every `about` / argument `help` string with the English or Turkish
-//!    version,
-//! 2. disable clap's built-in `--help` / `--version` handling and add our own
-//!    global flags, so `main` can render help itself and translate the few
-//!    structural labels clap hard-codes (`Usage:`, `Options:`, ...).
+//! The command *structure* comes from the `#[derive(Parser)]` types; here every
+//! `about` and argument `help` string is swapped for the English, Turkish or
+//! Spanish version, and clap's own section labels are translated after
+//! rendering.
 
 use crate::i18n::Lang;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 
-/// Pick the string for the active language.
-fn t(lang: Lang, en: &'static str, tr: &'static str) -> &'static str {
-    match lang {
-        Lang::En => en,
-        Lang::Tr => tr,
+type L3 = [&'static str; 3];
+
+/// Set an argument's help text if the argument exists on this command.
+fn arg_help(cmd: Command, id: &str, lang: Lang, text: L3) -> Command {
+    if cmd.get_arguments().any(|a| a.get_id() == id) {
+        cmd.mut_arg(id, |a| a.help(lang.pick(text)))
+    } else {
+        cmd
     }
 }
 
-fn localize_file_args(sc: Command, lang: Lang) -> Command {
-    sc.mut_arg("input", |a| {
-        a.help(t(
-            lang,
-            "Input file (omitted or `-` = stdin)",
-            "Girdi dosyası (belirtilmezse veya `-` ise stdin)",
-        ))
-    })
-    .mut_arg("output", |a| {
-        a.help(t(
-            lang,
-            "Output file (omitted or `-` = stdout)",
-            "Çıktı dosyası (belirtilmezse veya `-` ise stdout)",
-        ))
-    })
-}
+const INPUT: L3 = [
+    "Input file (omitted or `-` = stdin)",
+    "Girdi dosyası (belirtilmezse veya `-` ise stdin)",
+    "Archivo de entrada (omitido o `-` = stdin)",
+];
+const OUTPUT: L3 = [
+    "Output file (omitted or `-` = stdout)",
+    "Çıktı dosyası (belirtilmezse veya `-` ise stdout)",
+    "Archivo de salida (omitido o `-` = stdout)",
+];
 
-fn localize_crypt(sc: Command, lang: Lang, encrypt: bool) -> Command {
-    let about = if encrypt {
-        t(
-            lang,
-            "Encrypt data (AEAD output is `ciphertext||tag`)",
-            "Veriyi şifrele (AEAD çıktısı `şifreli metin||etiket` biçimindedir)",
-        )
-    } else {
-        t(
-            lang,
-            "Decrypt data produced by `easylock encrypt`",
-            "`easylock encrypt` ile üretilmiş veriyi çöz",
-        )
-    };
-    localize_file_args(sc, lang)
-        .about(about)
-        .mut_arg("cipher", |a| {
-            a.help(t(
-                lang,
-                "Cipher: aes-256-gcm, chacha20-poly1305, aes-256-ctr, xor",
-                "Şifre: aes-256-gcm, chacha20-poly1305, aes-256-ctr, xor",
-            ))
-        })
-        .mut_arg("key", |a| {
-            a.help(t(
-                lang,
-                "Key as hex (32 bytes for AES/ChaCha; any length for xor)",
-                "Onaltılık anahtar (AES/ChaCha için 32 bayt; xor için herhangi bir uzunluk)",
-            ))
-        })
-        .mut_arg("key_file", |a| {
-            a.help(t(
-                lang,
-                "Read the raw key bytes from a file",
-                "Ham anahtar baytlarını bir dosyadan oku",
-            ))
-        })
-        .mut_arg("nonce", |a| {
-            a.help(t(
-                lang,
-                "Nonce/IV as hex. Required to decrypt; auto-generated when encrypting",
-                "Onaltılık nonce/IV. Şifre çözmek için gerekli; şifrelerken otomatik üretilir",
-            ))
-        })
-        .mut_arg("aad", |a| {
-            a.help(t(
-                lang,
-                "Additional authenticated data as hex (AEAD ciphers only)",
-                "Onaltılık ek kimlik doğrulama verisi (yalnızca AEAD şifreleri)",
-            ))
-        })
-        .mut_arg("armor", |a| {
-            a.help(t(
-                lang,
-                "Base64-armor the output (encrypt) / expect Base64 input (decrypt)",
-                "Çıktıyı Base64 ile sarmala (şifrele) / Base64 girdisi bekle (çöz)",
-            ))
-        })
+/// `(subcommand, about, [(arg id, help)])`.
+type SubSpec = (&'static str, L3, &'static [(&'static str, L3)]);
+
+const SUBCOMMANDS: &[SubSpec] = &[
+    (
+        "hash",
+        [
+            "Hash data with SHA-256/512, SHA3-256, Keccak-256 or BLAKE3",
+            "Veriyi SHA-256/512, SHA3-256, Keccak-256 veya BLAKE3 ile özetle",
+            "Calcular hash con SHA-256/512, SHA3-256, Keccak-256 o BLAKE3",
+        ],
+        &[
+            ("algo", [
+                "Hash algorithm: sha256, sha512, keccak256, sha3-256, blake3",
+                "Özet algoritması: sha256, sha512, keccak256, sha3-256, blake3",
+                "Algoritmo de hash: sha256, sha512, keccak256, sha3-256, blake3",
+            ]),
+            ("encoding", [
+                "Digest output encoding: hex, base64 or raw",
+                "Özet çıktı kodlaması: hex, base64 veya raw",
+                "Codificación de salida: hex, base64 o raw",
+            ]),
+        ],
+    ),
+    (
+        "encode",
+        [
+            "Encode bytes to text (hex/base64/base64url/base58/rot13), chainable",
+            "Baytları metne kodla (hex/base64/base64url/base58/rot13), zincirlenebilir",
+            "Codificar bytes a texto (hex/base64/base64url/base58/rot13), encadenable",
+        ],
+        &[
+            ("transform", [
+                "Transform(s), comma-separated; applied left to right (e.g. base64,hex)",
+                "Dönüşüm(ler), virgülle ayrılır; soldan sağa uygulanır (örn. base64,hex)",
+                "Transformación(es) separadas por comas; de izquierda a derecha (p. ej. base64,hex)",
+            ]),
+            ("newline", [
+                "Append a trailing newline when writing text to stdout",
+                "stdout'a metin yazarken sona satır sonu ekle",
+                "Añadir un salto de línea final al escribir en stdout",
+            ]),
+        ],
+    ),
+    (
+        "decode",
+        [
+            "Decode text back to bytes (reverses an `encode` pipeline)",
+            "Metni baytlara geri çöz (`encode` işlem hattını tersine çevirir)",
+            "Decodificar texto a bytes (invierte una cadena de `encode`)",
+        ],
+        &[("transform", [
+            "The same transform spec used to encode; it is reversed automatically",
+            "Kodlarken kullanılan dönüşüm dizisi; otomatik olarak tersine çevrilir",
+            "La misma cadena usada al codificar; se invierte automáticamente",
+        ])],
+    ),
+    (
+        "lock",
+        [
+            "Encrypt a file with a password (.elk — opens in the app and website too)",
+            "Bir dosyayı parolayla şifrele (.elk — uygulama ve sitede de açılır)",
+            "Cifrar un archivo con contraseña (.elk — también se abre en la app y la web)",
+        ],
+        &[
+            ("cipher", ["aes-256-gcm or chacha20-poly1305", "aes-256-gcm veya chacha20-poly1305", "aes-256-gcm o chacha20-poly1305"]),
+            ("password", [
+                "Password (prefer the prompt or EASYLOCK_PASSWORD)",
+                "Parola (istem veya EASYLOCK_PASSWORD tercih edin)",
+                "Contraseña (mejor el aviso o EASYLOCK_PASSWORD)",
+            ]),
+        ],
+    ),
+    (
+        "unlock",
+        ["Decrypt a .elk file", "Bir .elk dosyasının şifresini çöz", "Descifrar un archivo .elk"],
+        &[("password", [
+            "Password (prefer the prompt or EASYLOCK_PASSWORD)",
+            "Parola (istem veya EASYLOCK_PASSWORD tercih edin)",
+            "Contraseña (mejor el aviso o EASYLOCK_PASSWORD)",
+        ])],
+    ),
+    (
+        "hmac",
+        [
+            "Compute a keyed message authentication code (HMAC)",
+            "Anahtarlı mesaj doğrulama kodu (HMAC) hesapla",
+            "Calcular un código de autenticación con clave (HMAC)",
+        ],
+        &[
+            ("algo", ["Hash: sha256, sha512, sha3-256, keccak256", "Özet: sha256, sha512, sha3-256, keccak256", "Hash: sha256, sha512, sha3-256, keccak256"]),
+            ("key", ["Key as hex", "Onaltılık anahtar", "Clave en hex"]),
+            ("key_text", ["Key as UTF-8 text", "UTF-8 metin anahtar", "Clave como texto UTF-8"]),
+        ],
+    ),
+    (
+        "kdf",
+        [
+            "Hash a password / derive a key (Argon2id, PBKDF2)",
+            "Parola özetle / anahtar türet (Argon2id, PBKDF2)",
+            "Hash de contraseña / derivar clave (Argon2id, PBKDF2)",
+        ],
+        &[
+            ("algo", ["argon2id (default) or pbkdf2", "argon2id (varsayılan) veya pbkdf2", "argon2id (predeterminado) o pbkdf2"]),
+            ("password", ["Password (omit to read from stdin)", "Parola (belirtilmezse stdin'den okunur)", "Contraseña (omitir para leer de stdin)"]),
+            ("salt", ["Salt as hex (random if omitted)", "Onaltılık tuz (belirtilmezse rastgele)", "Sal en hex (aleatoria si se omite)"]),
+            ("memory", ["Argon2 memory in KiB", "Argon2 belleği (KiB)", "Memoria de Argon2 en KiB"]),
+            ("iterations", ["Argon2 passes / PBKDF2 iterations", "Argon2 geçişleri / PBKDF2 yinelemeleri", "Pasadas de Argon2 / iteraciones PBKDF2"]),
+            ("parallelism", ["Argon2 parallelism (lanes)", "Argon2 paralelliği (şerit)", "Paralelismo de Argon2 (carriles)"]),
+            ("length", ["Output key length in bytes", "Çıktı anahtar uzunluğu (bayt)", "Longitud de la clave en bytes"]),
+            ("verify", [
+                "Verify the password against a PHC string instead of hashing",
+                "Özetlemek yerine parolayı bir PHC dizesine karşı doğrula",
+                "Verificar la contraseña contra una cadena PHC en lugar de calcularla",
+            ]),
+        ],
+    ),
+    (
+        "password",
+        [
+            "Generate strong random passwords",
+            "Güçlü rastgele parolalar üret",
+            "Generar contraseñas aleatorias robustas",
+        ],
+        &[
+            ("length", ["Password length (4–256)", "Parola uzunluğu (4–256)", "Longitud (4–256)"]),
+            ("count", ["How many passwords to print", "Kaç parola yazdırılacak", "Cuántas contraseñas imprimir"]),
+            ("symbols", ["Include symbols (!@#$…)", "Sembolleri dahil et (!@#$…)", "Incluir símbolos (!@#$…)"]),
+            ("no_lower", ["Exclude lowercase letters", "Küçük harfleri çıkar", "Excluir minúsculas"]),
+            ("no_upper", ["Exclude uppercase letters", "Büyük harfleri çıkar", "Excluir mayúsculas"]),
+            ("no_digits", ["Exclude digits", "Rakamları çıkar", "Excluir dígitos"]),
+        ],
+    ),
+    (
+        "keygen",
+        [
+            "Generate a key pair (Ed25519, X25519, ML-KEM/Kyber, RSA-2048)",
+            "Anahtar çifti üret (Ed25519, X25519, ML-KEM/Kyber, RSA-2048)",
+            "Generar un par de claves (Ed25519, X25519, ML-KEM/Kyber, RSA-2048)",
+        ],
+        &[
+            ("kind", [
+                "ed25519, x25519, mlkem512, mlkem768, mlkem1024, rsa2048",
+                "ed25519, x25519, mlkem512, mlkem768, mlkem1024, rsa2048",
+                "ed25519, x25519, mlkem512, mlkem768, mlkem1024, rsa2048",
+            ]),
+            ("json", ["Output as JSON", "JSON olarak yazdır", "Salida en JSON"]),
+        ],
+    ),
+    (
+        "sign",
+        ["Sign data with an Ed25519 seed", "Veriyi Ed25519 tohumuyla imzala", "Firmar datos con una semilla Ed25519"],
+        &[("seed", ["32-byte seed as hex", "32 baytlık onaltılık tohum", "Semilla de 32 bytes en hex"])],
+    ),
+    (
+        "verify",
+        ["Verify an Ed25519 signature", "Ed25519 imzasını doğrula", "Verificar una firma Ed25519"],
+        &[
+            ("public", ["32-byte public key as hex", "32 baytlık onaltılık açık anahtar", "Clave pública de 32 bytes en hex"]),
+            ("signature", ["64-byte signature as hex", "64 baytlık onaltılık imza", "Firma de 64 bytes en hex"]),
+        ],
+    ),
+    (
+        "info",
+        [
+            "Show version, hardware backends and supported algorithms",
+            "Sürüm, donanım arka uçları ve desteklenen algoritmaları göster",
+            "Mostrar versión, backends de hardware y algoritmos",
+        ],
+        &[],
+    ),
+    (
+        "tui",
+        [
+            "Open the full-screen terminal UI",
+            "Tam ekran terminal arayüzünü aç",
+            "Abrir la interfaz de terminal a pantalla completa",
+        ],
+        &[],
+    ),
+];
+
+const CRYPT_ARGS: &[(&str, L3)] = &[
+    (
+        "cipher",
+        [
+            "Cipher: aes-256-gcm, chacha20-poly1305, aes-256-ctr, xor",
+            "Şifre: aes-256-gcm, chacha20-poly1305, aes-256-ctr, xor",
+            "Cifrado: aes-256-gcm, chacha20-poly1305, aes-256-ctr, xor",
+        ],
+    ),
+    (
+        "key",
+        [
+            "Key as hex (32 bytes for AES/ChaCha; any length for xor)",
+            "Onaltılık anahtar (AES/ChaCha için 32 bayt; xor için herhangi bir uzunluk)",
+            "Clave en hex (32 bytes para AES/ChaCha; cualquier longitud para xor)",
+        ],
+    ),
+    (
+        "key_file",
+        [
+            "Read the raw key bytes from a file",
+            "Ham anahtar baytlarını bir dosyadan oku",
+            "Leer los bytes de la clave desde un archivo",
+        ],
+    ),
+    (
+        "nonce",
+        [
+            "Nonce/IV as hex. Required to decrypt; auto-generated when encrypting",
+            "Onaltılık nonce/IV. Şifre çözmek için gerekli; şifrelerken otomatik üretilir",
+            "Nonce/IV en hex. Necesario para descifrar; se genera al cifrar",
+        ],
+    ),
+    (
+        "aad",
+        [
+            "Additional authenticated data as hex (AEAD ciphers only)",
+            "Onaltılık ek kimlik doğrulama verisi (yalnızca AEAD şifreleri)",
+            "Datos autenticados adicionales en hex (solo AEAD)",
+        ],
+    ),
+    (
+        "armor",
+        [
+            "Base64-armor the output (encrypt) / expect Base64 input (decrypt)",
+            "Çıktıyı Base64 ile sarmala (şifrele) / Base64 girdisi bekle (çöz)",
+            "Salida en Base64 (cifrar) / esperar entrada Base64 (descifrar)",
+        ],
+    ),
+];
+
+fn localize_sub(sc: Command, lang: Lang, about: L3, args: &[(&str, L3)]) -> Command {
+    let mut sc = sc.about(lang.pick(about));
+    sc = arg_help(sc, "input", lang, INPUT);
+    sc = arg_help(sc, "output", lang, OUTPUT);
+    for (id, text) in args {
+        sc = arg_help(sc, id, lang, *text);
+    }
+    sc
 }
 
 /// Recursively drop clap's built-in help flag / help subcommand so we can supply
@@ -114,12 +290,9 @@ fn disable_builtin_help(cmd: Command) -> Command {
     cmd
 }
 
-/// Build the fully-localized top-level command.
-// This is a flat translation table; splitting it up only scatters the strings.
-#[allow(clippy::too_many_lines)]
+/// Build the fully-localised top-level command.
 pub fn localized_command(base: Command, lang: Lang) -> Command {
-    let base = disable_builtin_help(base)
-        // `main` renders help itself (localized) when no subcommand is given.
+    let mut cmd = disable_builtin_help(base)
         .subcommand_required(false)
         .arg(
             Arg::new("help")
@@ -127,7 +300,7 @@ pub fn localized_command(base: Command, lang: Lang) -> Command {
                 .long("help")
                 .global(true)
                 .action(ArgAction::SetTrue)
-                .help(t(lang, "Print help", "Yardımı göster")),
+                .help(lang.pick(["Print help", "Yardımı göster", "Mostrar ayuda"])),
         )
         .arg(
             Arg::new("version")
@@ -135,99 +308,68 @@ pub fn localized_command(base: Command, lang: Lang) -> Command {
                 .long("version")
                 .global(true)
                 .action(ArgAction::SetTrue)
-                .help(t(lang, "Print version", "Sürümü göster")),
-        );
-
-    let cmd = base
-        .about(t(
-            lang,
+                .help(lang.pick(["Print version", "Sürümü göster", "Mostrar versión"])),
+        )
+        .about(lang.pick([
             "easylock — a from-scratch cryptography toolkit",
             "easylock — sıfırdan yazılmış bir kriptografi araç seti",
-        ))
+            "easylock — un kit de criptografía escrito desde cero",
+        ]))
         .after_help(match lang {
             Lang::En => format!(
-                "Active language: {} · switch with --lang tr|en or the LANG / LC_ALL locale.\n\
-                 All commands stream stdin -> stdout and accept files with -o.",
+                "Active language: {} · switch with --lang en|tr|es or the LANG / LC_ALL locale.\n\
+                 Try `easylock tui` for the interactive terminal UI.",
                 lang.endonym()
             ),
             Lang::Tr => format!(
-                "Etkin dil: {} · --lang tr|en ile ya da LANG / LC_ALL yerel ayarıyla değiştirin.\n\
-                 Tüm komutlar stdin -> stdout akışını destekler; dosyalar için -o kullanın.",
+                "Etkin dil: {} · --lang en|tr|es ile ya da LANG / LC_ALL yerel ayarıyla değiştirin.\n\
+                 Etkileşimli terminal arayüzü için `easylock tui` deneyin.",
+                lang.endonym()
+            ),
+            Lang::Es => format!(
+                "Idioma activo: {} · cámbielo con --lang en|tr|es o la configuración LANG / LC_ALL.\n\
+                 Pruebe `easylock tui` para la interfaz interactiva de terminal.",
                 lang.endonym()
             ),
         })
         .mut_arg("lang", |a| {
-            a.help(t(
-                lang,
-                "Interface language for messages and help: `tr` or `en`",
-                "Mesajlar ve yardım için arayüz dili: `tr` veya `en`",
-            ))
+            a.help(lang.pick([
+                "Interface language for messages and help: `en`, `tr` or `es`",
+                "Mesajlar ve yardım için arayüz dili: `en`, `tr` veya `es`",
+                "Idioma de la interfaz para mensajes y ayuda: `en`, `tr` o `es`",
+            ]))
         });
 
-    cmd.mut_subcommand("hash", |sc| {
-        localize_file_args(sc, lang)
-            .about(t(
-                lang,
-                "Hash data with SHA-256/512, Keccak-256 or SHA3-256",
-                "Veriyi SHA-256/512, Keccak-256 veya SHA3-256 ile özetle",
-            ))
-            .mut_arg("algo", |a| {
-                a.help(t(
-                    lang,
-                    "Hash algorithm: sha256, sha512, keccak256, sha3-256, blake3",
-                    "Özet algoritması: sha256, sha512, keccak256, sha3-256, blake3",
-                ))
-            })
-            .mut_arg("encoding", |a| {
-                a.help(t(
-                    lang,
-                    "Digest output encoding: hex, base64 or raw",
-                    "Özet çıktı kodlaması: hex, base64 veya raw",
-                ))
-            })
+    for (name, about, args) in SUBCOMMANDS {
+        cmd = cmd.mut_subcommand(*name, |sc| localize_sub(sc, lang, *about, args));
+    }
+    cmd = cmd.mut_subcommand("encrypt", |sc| {
+        localize_sub(
+            sc,
+            lang,
+            [
+                "Encrypt data (AEAD output is `ciphertext||tag`)",
+                "Veriyi şifrele (AEAD çıktısı `şifreli metin||etiket` biçimindedir)",
+                "Cifrar datos (la salida AEAD es `texto cifrado||etiqueta`)",
+            ],
+            CRYPT_ARGS,
+        )
+    });
+    cmd.mut_subcommand("decrypt", |sc| {
+        localize_sub(
+            sc,
+            lang,
+            [
+                "Decrypt data produced by `easylock encrypt`",
+                "`easylock encrypt` ile üretilmiş veriyi çöz",
+                "Descifrar datos producidos por `easylock encrypt`",
+            ],
+            CRYPT_ARGS,
+        )
     })
-    .mut_subcommand("encode", |sc| {
-        localize_file_args(sc, lang)
-            .about(t(
-                lang,
-                "Encode bytes to text (hex/base64/base64url/base58/rot13), chainable",
-                "Baytları metne kodla (hex/base64/base64url/base58/rot13), zincirlenebilir",
-            ))
-            .mut_arg("transform", |a| {
-                a.help(t(
-                    lang,
-                    "Transform(s), comma-separated; applied left to right (e.g. base64,hex)",
-                    "Dönüşüm(ler), virgülle ayrılır; soldan sağa uygulanır (örn. base64,hex)",
-                ))
-            })
-            .mut_arg("newline", |a| {
-                a.help(t(
-                    lang,
-                    "Append a trailing newline when writing text to stdout",
-                    "stdout'a metin yazarken sona satır sonu ekle",
-                ))
-            })
-    })
-    .mut_subcommand("decode", |sc| {
-        localize_file_args(sc, lang)
-            .about(t(
-                lang,
-                "Decode text back to bytes (reverses an `encode` pipeline)",
-                "Metni baytlara geri çöz (`encode` işlem hattını tersine çevirir)",
-            ))
-            .mut_arg("transform", |a| {
-                a.help(t(
-                    lang,
-                    "The same transform spec used to encode; it is reversed automatically",
-                    "Kodlarken kullanılan dönüşüm dizisi; otomatik olarak tersine çevrilir",
-                ))
-            })
-    })
-    .mut_subcommand("encrypt", |sc| localize_crypt(sc, lang, true))
-    .mut_subcommand("decrypt", |sc| localize_crypt(sc, lang, false))
 }
 
-/// `true` if `-h/--help` (or `-V/--version`) was passed at any nesting level.
+/// `true` if `-h/--help` was passed at any nesting level.
 pub fn wants_help(m: &ArgMatches) -> bool {
     flag_set(m, "help")
 }
@@ -266,8 +408,7 @@ fn collect_path(m: &ArgMatches, path: &mut Vec<String>) {
     }
 }
 
-/// Descend to the deepest named (sub)command in `m`; `-h` there means "help for
-/// this context".
+/// Descend to the deepest named (sub)command in `m`.
 fn locate<'a>(cmd: &'a mut Command, m: &ArgMatches) -> &'a mut Command {
     if let Some((name, sub_m)) = m.subcommand() {
         if cmd.find_subcommand(name).is_some() {
@@ -278,21 +419,33 @@ fn locate<'a>(cmd: &'a mut Command, m: &ArgMatches) -> &'a mut Command {
 }
 
 fn localize_labels(s: &str, lang: Lang) -> String {
-    match lang {
-        Lang::En => s.to_string(),
-        Lang::Tr => s
-            .replace("Usage:", "Kullanım:")
-            .replace("Commands:", "Komutlar:")
-            .replace("Arguments:", "Bağımsız değişkenler:")
-            .replace("Options:", "Seçenekler:")
-            .replace("[default:", "[varsayılan:")
-            .replace("[possible values:", "[olası değerler:")
-            .replace("[aliases:", "[takma adlar:")
-            .replace(
-                "Print this message or the help of the given subcommand(s)",
-                "Bu iletiyi veya verilen alt komutların yardımını göster",
-            ),
+    let pairs: &[(&str, L3)] = &[
+        ("Usage:", ["Usage:", "Kullanım:", "Uso:"]),
+        ("Commands:", ["Commands:", "Komutlar:", "Comandos:"]),
+        (
+            "Arguments:",
+            ["Arguments:", "Bağımsız değişkenler:", "Argumentos:"],
+        ),
+        ("Options:", ["Options:", "Seçenekler:", "Opciones:"]),
+        (
+            "[default:",
+            ["[default:", "[varsayılan:", "[predeterminado:"],
+        ),
+        (
+            "[possible values:",
+            [
+                "[possible values:",
+                "[olası değerler:",
+                "[valores posibles:",
+            ],
+        ),
+        ("[aliases:", ["[aliases:", "[takma adlar:", "[alias:"]),
+    ];
+    let mut out = s.to_string();
+    for (en, l3) in pairs {
+        out = out.replace(en, lang.pick(*l3));
     }
+    out
 }
 
 #[cfg(test)]
@@ -300,22 +453,37 @@ mod tests {
     use super::*;
     use clap::CommandFactory;
 
-    #[test]
-    fn turkish_help_renders_turkish_about_and_labels() {
-        let mut cmd = localized_command(crate::Cli::command(), Lang::Tr);
-        let help = localize_labels(&cmd.render_long_help().to_string(), Lang::Tr);
-        assert!(help.contains("kriptografi araç seti"), "{help}");
-        assert!(help.contains("Kullanım:"));
-        assert!(help.contains("Komutlar:"));
-        assert!(help.contains("Seçenekler:"));
+    fn root_help(lang: Lang) -> String {
+        let mut cmd = localized_command(crate::Cli::command(), lang);
+        localize_labels(&cmd.render_long_help().to_string(), lang)
     }
 
     #[test]
-    fn english_help_stays_english() {
-        let mut cmd = localized_command(crate::Cli::command(), Lang::En);
-        let help = cmd.render_long_help().to_string();
-        assert!(help.contains("from-scratch cryptography toolkit"));
-        assert!(help.contains("Usage:"));
+    fn root_help_in_three_languages() {
+        let en = root_help(Lang::En);
+        assert!(en.contains("from-scratch cryptography toolkit") && en.contains("Usage:"));
+        let tr = root_help(Lang::Tr);
+        assert!(
+            tr.contains("kriptografi araç seti")
+                && tr.contains("Kullanım:")
+                && tr.contains("Komutlar:")
+        );
+        let es = root_help(Lang::Es);
+        assert!(
+            es.contains("kit de criptografía") && es.contains("Uso:") && es.contains("Comandos:")
+        );
+    }
+
+    #[test]
+    fn every_subcommand_is_localized() {
+        let es = root_help(Lang::Es);
+        for needle in [
+            "Generar un par de claves",
+            "Abrir la interfaz",
+            "Verificar una firma",
+        ] {
+            assert!(es.contains(needle), "{needle}\n{es}");
+        }
     }
 
     #[test]
