@@ -8,6 +8,8 @@
 use crate::hash::blake2b;
 use crate::secure::{zeroize_u64s, Zeroize};
 use crate::{Error, Result};
+use alloc::format;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -464,6 +466,86 @@ fn h_prime(out_len: usize, input: &[u8]) -> Vec<u8> {
     out
 }
 
+// --- PHC string format ------------------------------------------------------
+
+/// Standard Base64 without padding — the alphabet the PHC string format uses.
+fn b64_nopad(data: &[u8]) -> String {
+    let mut s = crate::encode::base64::encode(data, crate::encode::base64::Variant::Standard);
+    while s.ends_with('=') {
+        s.pop();
+    }
+    s
+}
+
+/// Encode an Argon2id result as a PHC string:
+/// `$argon2id$v=19$m=<KiB>,t=<passes>,p=<lanes>$<salt>$<hash>`.
+///
+/// Interoperable with the reference `argon2` CLI, libsodium, passlib, etc.
+#[must_use]
+pub fn phc_string(params: &Params, salt: &[u8], tag: &[u8]) -> String {
+    format!(
+        "$argon2id$v=19$m={},t={},p={}${}${}",
+        params.m_cost,
+        params.t_cost,
+        params.parallelism,
+        b64_nopad(salt),
+        b64_nopad(tag)
+    )
+}
+
+/// Hash `password` with a fresh caller-supplied salt and return the PHC string.
+pub fn hash_phc(password: &[u8], salt: &[u8], params: Params) -> Result<String> {
+    let tag = hash(password, salt, params)?;
+    Ok(phc_string(&params, salt, &tag))
+}
+
+/// Verify `password` against an `$argon2id$` / `$argon2i$` / `$argon2d$` PHC
+/// string. The final comparison is constant-time.
+///
+/// # Errors
+/// [`Error::InvalidEncoding`] if the string is not a well-formed PHC hash.
+pub fn verify_phc(password: &[u8], phc: &str) -> Result<bool> {
+    let bad = || Error::InvalidEncoding { scheme: "phc" };
+    let parts: Vec<&str> = phc.trim().split('$').collect();
+    // ["", "argon2id", "v=19", "m=..,t=..,p=..", salt, hash]
+    if parts.len() != 6 || !parts[0].is_empty() {
+        return Err(bad());
+    }
+    let variant = match parts[1] {
+        "argon2id" => Variant::Id,
+        "argon2i" => Variant::I,
+        "argon2d" => Variant::D,
+        _ => return Err(bad()),
+    };
+    if parts[2] != "v=19" {
+        return Err(Error::Unsupported {
+            what: "argon2 version other than 0x13",
+        });
+    }
+    let (mut m, mut t, mut p) = (None, None, None);
+    for kv in parts[3].split(',') {
+        let (k, v) = kv.split_once('=').ok_or_else(bad)?;
+        let n: u32 = v.parse().map_err(|_| bad())?;
+        match k {
+            "m" => m = Some(n),
+            "t" => t = Some(n),
+            "p" => p = Some(n),
+            _ => return Err(bad()),
+        }
+    }
+    let std = crate::encode::base64::Variant::Standard;
+    let salt = crate::encode::base64::decode(parts[4], std).map_err(|_| bad())?;
+    let expected = crate::encode::base64::decode(parts[5], std).map_err(|_| bad())?;
+    let params = Params {
+        m_cost: m.ok_or_else(bad)?,
+        t_cost: t.ok_or_else(bad)?,
+        parallelism: p.ok_or_else(bad)?,
+        out_len: expected.len(),
+    };
+    let got = derive(variant, password, &salt, &[], &[], params)?;
+    Ok(bool::from(crate::ct::ct_eq(&got, &expected)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,6 +633,20 @@ mod tests {
             encode(&derive(Variant::I, &password, &salt, &secret, &ad, p(32, 3, 4, 32)).unwrap()),
             "c814d9d1dc7f37aa13f0d77f2494bda1c8de6b016dd388d29952a4c4672b6ce8"
         );
+    }
+
+    // PHC strings match the reference `argon2` CLI byte-for-byte, and verify.
+    #[test]
+    fn phc_roundtrip_matches_reference_cli() {
+        let params = p(8, 1, 1, 32);
+        let phc = hash_phc(b"password", b"somesalt", params).unwrap();
+        assert_eq!(
+            phc,
+            "$argon2id$v=19$m=8,t=1,p=1$c29tZXNhbHQ$8Tf44YakA6Z5zNBgblq13Nr+Q8FkCFWsjG4z6b1j7rM"
+        );
+        assert!(verify_phc(b"password", &phc).unwrap());
+        assert!(!verify_phc(b"Password", &phc).unwrap());
+        assert!(verify_phc(b"x", "not-a-phc").is_err());
     }
 
     #[test]
