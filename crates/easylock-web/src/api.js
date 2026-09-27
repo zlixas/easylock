@@ -75,9 +75,11 @@ export const api = {
   edSign: (seedHex, msg) => wasm.ed25519_sign(seedHex, msg),
   edVerify: (publicHex, msg, sigHex) => wasm.ed25519_verify(publicHex, msg, sigHex),
 
-  elkSealFile: (data, pw, cipher) => wasm.elk_seal_file(data, enc.encode(pw), cipher),
-  elkOpenFile: (data, pw) => wasm.elk_open_file(data, enc.encode(pw)),
-  elkInspect: (data) => wasm.elk_inspect(data),
+  elkSeal: (data, pw, recipients, cipher) => wasm.elk_seal(data, enc.encode(pw), recipients, cipher, false),
+  elkOpen: (data, pw, identity) => wasm.elk_open(data, enc.encode(pw), identity),
+  elkInfo: (data) => wasm.elk_info(data),
+  identityGenerate: () => wasm.identity_generate(),
+  identityPublic: (secret) => wasm.identity_public(secret.trim()),
   elkSealToken: (text, pw, cipher) => wasm.elk_seal_token(text, enc.encode(pw), cipher),
   elkOpenToken: (token, pw) => wasm.elk_open_token(token.trim(), enc.encode(pw)),
 

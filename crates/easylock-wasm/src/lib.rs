@@ -467,38 +467,155 @@ fn container_cipher(name: &str) -> Result<easylock_core::container::Cipher, JsVa
         .ok_or_else(|| err(format!("unknown cipher `{name}`")))
 }
 
-/// Encrypt bytes into a `.elk` file (Argon2id 64 MiB).
+fn elk_error(e: &easylock_core::Error) -> JsValue {
+    match e {
+        easylock_core::Error::Authentication => {
+            err("wrong password or key, or the file is corrupted / was modified")
+        }
+        other => err(other.to_string()),
+    }
+}
+
+/// Encrypt bytes into a `.elk` (ELK2) file with a password (Argon2id 64 MiB) and/or
+/// public keys (`elkpub1…`, one per line). An empty password means "no password slot".
+#[wasm_bindgen]
+pub fn elk_seal(
+    data: &[u8],
+    password: &[u8],
+    recipients: &str,
+    cipher: &str,
+    folder: bool,
+) -> Result<Vec<u8>, JsValue> {
+    use easylock_core::container::elk2::{Recipient, SlotSpec, FLAG_ARCHIVE};
+    use easylock_core::container::stream::{seal_bytes, EncryptOptions};
+    let recips: Vec<Recipient> = recipients
+        .split_whitespace()
+        .map(|r| Recipient::parse(r).map_err(|_| err(format!("invalid public key: {r}"))))
+        .collect::<Result<_, _>>()?;
+    let mut slots: Vec<SlotSpec<'_>> = recips.iter().map(SlotSpec::Recipient).collect();
+    if !password.is_empty() {
+        slots.push(SlotSpec::Password {
+            password,
+            params: easylock_core::container::FILE_PARAMS,
+        });
+    }
+    if slots.is_empty() {
+        return Err(err("enter a password or at least one public key"));
+    }
+    let opts = EncryptOptions {
+        cipher: container_cipher(cipher)?,
+        slots,
+        flags: if folder { FLAG_ARCHIVE } else { 0 },
+    };
+    seal_bytes(data, &opts, &mut rng()).map_err(|e| elk_error(&e))
+}
+
+/// Encrypt bytes into a password-protected `.elk` file (kept for compatibility).
 #[wasm_bindgen]
 pub fn elk_seal_file(data: &[u8], password: &[u8], cipher: &str) -> Result<Vec<u8>, JsValue> {
-    use easylock_core::container;
-    container::seal_file(
-        data,
-        password,
-        container_cipher(cipher)?,
-        container::FILE_PARAMS,
-        &mut rng(),
-    )
-    .map_err(err)
+    elk_seal(data, password, "", cipher, false)
 }
 
-/// Decrypt a `.elk` file.
+/// Decrypt a `.elk` file (ELK1 or ELK2) with a password and/or an identity
+/// (`ELK-SECRET-KEY-1…`). Either may be empty.
+#[wasm_bindgen]
+pub fn elk_open(data: &[u8], password: &[u8], identity: &str) -> Result<Vec<u8>, JsValue> {
+    use easylock_core::container::elk2::{Credential, Identity};
+    let id = if identity.trim().is_empty() {
+        None
+    } else {
+        Some(Identity::parse(identity).map_err(|_| err("invalid secret key"))?)
+    };
+    let mut creds = Vec::new();
+    if let Some(id) = &id {
+        creds.push(Credential::Identity(id));
+    }
+    if !password.is_empty() {
+        creds.push(Credential::Password(password));
+    }
+    easylock_core::container::stream::open_bytes(data, &creds)
+        .map(|(plain, _)| plain)
+        .map_err(|e| elk_error(&e))
+}
+
+/// Decrypt a password-protected `.elk` file (kept for compatibility).
 #[wasm_bindgen]
 pub fn elk_open_file(data: &[u8], password: &[u8]) -> Result<Vec<u8>, JsValue> {
-    easylock_core::container::open_file(data, password)
-        .map_err(|_| err("wrong password, or the file is corrupted / not an easylock file"))
+    elk_open(data, password, "")
 }
 
-/// Cipher name recorded in a `.elk` header (for display before decrypting).
+#[derive(Serialize)]
+struct ElkInfo {
+    version: u8,
+    cipher: &'static str,
+    folder: bool,
+    password: bool,
+    recipients: usize,
+    summary: String,
+}
+
+/// Describe a `.elk` file without decrypting it.
+#[wasm_bindgen]
+pub fn elk_info(data: &[u8]) -> Result<JsValue, JsValue> {
+    use std::fmt::Write;
+    let i = easylock_core::container::stream::inspect(data).map_err(|e| err(e.to_string()))?;
+    let mut summary = format!("ELK{} · {}", i.version, i.cipher.name());
+    for p in &i.password_slots {
+        let _ = write!(summary, " · password (Argon2id {} MiB)", p.m_cost / 1024);
+    }
+    if i.recipients > 0 {
+        let _ = write!(summary, " · {} public key(s)", i.recipients);
+    }
+    if i.archive {
+        summary.push_str(" · folder");
+    }
+    Ok(js(&ElkInfo {
+        version: i.version,
+        cipher: i.cipher.name(),
+        folder: i.archive,
+        password: !i.password_slots.is_empty(),
+        recipients: i.recipients,
+        summary,
+    }))
+}
+
+/// One-line description of a `.elk` header (kept for compatibility).
 #[wasm_bindgen]
 pub fn elk_inspect(data: &[u8]) -> Result<String, JsValue> {
-    let h = easylock_core::container::parse_header(data).map_err(err)?;
-    Ok(format!(
-        "{} · Argon2id m={} KiB t={} p={}",
-        h.cipher.name(),
-        h.params.m_cost,
-        h.params.t_cost,
-        h.params.parallelism
-    ))
+    let i = easylock_core::container::stream::inspect(data).map_err(|e| err(e.to_string()))?;
+    Ok(format!("ELK{} · {}", i.version, i.cipher.name()))
+}
+
+#[derive(Serialize)]
+struct IdentityOut {
+    secret: String,
+    public: String,
+    fingerprint: String,
+}
+
+/// Generate a new identity (X25519 + ML-KEM-768 key pair).
+#[wasm_bindgen]
+pub fn identity_generate() -> JsValue {
+    let id = easylock_core::container::elk2::Identity::generate(&mut rng());
+    let r = id.recipient();
+    js(&IdentityOut {
+        secret: id.encode_secret(),
+        public: r.encode(),
+        fingerprint: r.fingerprint(),
+    })
+}
+
+/// Public key and fingerprint of a secret identity.
+#[wasm_bindgen]
+pub fn identity_public(secret: &str) -> Result<JsValue, JsValue> {
+    let id = easylock_core::container::elk2::Identity::parse(secret)
+        .map_err(|_| err("invalid secret key"))?;
+    let r = id.recipient();
+    Ok(js(&IdentityOut {
+        secret: String::new(),
+        public: r.encode(),
+        fingerprint: r.fingerprint(),
+    }))
 }
 
 /// Encrypt text into an `elk1.` token.
