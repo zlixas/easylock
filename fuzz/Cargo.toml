@@ -1,0 +1,46 @@
+[package]
+name = "easylock-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+easylock-core = { path = "../crates/easylock-core" }
+
+# Keep the fuzz crate out of the main workspace.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "elk_header"
+path = "fuzz_targets/elk_header.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "elk_payload"
+path = "fuzz_targets/elk_payload.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "archive"
+path = "fuzz_targets/archive.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "decoders"
+path = "fuzz_targets/decoders.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "aead_roundtrip"
+path = "fuzz_targets/aead_roundtrip.rs"
+test = false
+doc = false
