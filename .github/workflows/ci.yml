@@ -30,10 +30,10 @@ jobs:
           - os: macos-latest
             exclude: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install toolchain (from rust-toolchain.toml)
         run: rustup show active-toolchain || rustup toolchain install
-      - uses: actions/cache@v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
@@ -46,15 +46,19 @@ jobs:
         run: cargo clippy --workspace ${{ matrix.exclude }} --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace ${{ matrix.exclude }}
+      - name: report hardware crypto paths exercised
+        run: cargo test -p easylock-core --release hardware_matches_portable -- --nocapture
 
   web:
     name: WebAssembly + website
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: rustup target add wasm32-unknown-unknown
-      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - uses: actions/setup-node@v4
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+        with:
+          tool: wasm-pack
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: npm
@@ -64,3 +68,43 @@ jobs:
       - name: build site
         working-directory: crates/easylock-web
         run: npm ci && npm run wasm && npm run build
+
+  supply-chain:
+    name: Dependencies (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check
+
+  fuzz:
+    name: Fuzz smoke test (60 s per target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: rustup toolchain install nightly --profile minimal
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+        with:
+          tool: cargo-fuzz
+      - name: run fuzz targets
+        working-directory: fuzz
+        run: |
+          for t in elk_header elk_payload archive decoders aead_roundtrip; do
+            cargo +nightly fuzz run "$t" -- -max_total_time=60 -max_len=4096
+          done
+
+  coverage:
+    name: Test coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: rustup component add llvm-tools-preview
+      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+        with:
+          tool: cargo-llvm-cov
+      - name: measure
+        run: |
+          cargo llvm-cov --workspace --exclude easylock-gui --summary-only | tee coverage.txt
+          { echo '### Test coverage'; echo '```'; tail -n 30 coverage.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
