@@ -367,7 +367,13 @@ pub fn x25519(scalar_hex: &str, point_hex: &str) -> Result<String, JsValue> {
         .ok()
         .and_then(|v| v.try_into().ok())
         .ok_or_else(|| err("point must be 32 hex bytes"))?;
-    Ok(hex::encode(&easylock_core::ec::x25519(&s, &p)))
+    let shared = easylock_core::ec::x25519(&s, &p);
+    if shared == [0u8; 32] {
+        return Err(err(
+            "peer public key has small order (all-zero shared secret)",
+        ));
+    }
+    Ok(hex::encode(&shared))
 }
 
 /// Fill a fresh `Uint8Array` of `n` random bytes (browser CSPRNG).

@@ -89,7 +89,7 @@ fn app() -> Router {
         .route("/v1/ed25519/sign", post(ed_sign))
         .route("/v1/ed25519/verify", post(ed_verify))
         .layer(DefaultBodyLimit::max(16 * 1024 * 1024))
-        .layer(CorsLayer::very_permissive());
+        .layer(cors_layer());
 
     // Static frontend with SPA fallback; missing dist just yields 404s for `/`.
     let dist = web_dist();
@@ -293,7 +293,41 @@ struct Argon2Resp {
     phc: String,
 }
 
+/// Upper bounds for caller-chosen KDF costs, so one request can't exhaust the
+/// server's memory or CPU.
+const MAX_ARGON2_M_KIB: u32 = 1024 * 1024; // 1 GiB
+const MAX_ARGON2_T: u32 = 16;
+const MAX_ARGON2_P: u32 = 16;
+const MAX_PBKDF2_ITERATIONS: u32 = 10_000_000;
+const MAX_KDF_OUT: usize = 1024;
+
+/// CORS: none by default (the dashboard is served from the same origin), so other
+/// websites a user visits can't drive this local API from the browser. A single
+/// trusted origin can be allowed with `EASYLOCK_CORS_ORIGIN=https://example.com`.
+fn cors_layer() -> CorsLayer {
+    use tower_http::cors::AllowOrigin;
+    match std::env::var("EASYLOCK_CORS_ORIGIN")
+        .ok()
+        .and_then(|o| o.parse().ok())
+    {
+        Some(origin) => CorsLayer::new()
+            .allow_origin(AllowOrigin::exact(origin))
+            .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+            .allow_headers([axum::http::header::CONTENT_TYPE]),
+        None => CorsLayer::new(),
+    }
+}
+
 async fn kdf_argon2(Json(req): Json<Argon2Req>) -> ApiResult<Json<Argon2Resp>> {
+    if req.m_cost > MAX_ARGON2_M_KIB
+        || req.t_cost > MAX_ARGON2_T
+        || req.parallelism > MAX_ARGON2_P
+        || req.out_len > MAX_KDF_OUT
+    {
+        return Err(bad(format!(
+            "argon2 parameters too large (max m_cost={MAX_ARGON2_M_KIB} KiB, t_cost={MAX_ARGON2_T}, parallelism={MAX_ARGON2_P}, out_len={MAX_KDF_OUT})"
+        )));
+    }
     let salt = if req.salt_hex.is_empty() {
         random::bytes(16).map_err(bad)?
     } else {
@@ -329,6 +363,11 @@ fn d_sha() -> String {
 }
 
 async fn kdf_pbkdf2(Json(req): Json<Pbkdf2Req>) -> ApiResult<Json<HashResp>> {
+    if req.iterations > MAX_PBKDF2_ITERATIONS || req.out_len > MAX_KDF_OUT {
+        return Err(bad(format!(
+            "pbkdf2 parameters too large (max iterations={MAX_PBKDF2_ITERATIONS}, out_len={MAX_KDF_OUT})"
+        )));
+    }
     let salt = de_hex(&req.salt_hex, "salt_hex")?;
     let dk = match req.hash.as_str() {
         "sha256" => easylock_core::kdf::pbkdf2::<Sha256>(
@@ -515,7 +554,8 @@ fn keygen_blocking(kind: &str) -> ApiResult<KeygenResp> {
                 _ => &MlKem768,
             };
             let mut rng = |b: &mut [u8]| {
-                let r = random::bytes(b.len()).unwrap_or_else(|_| vec![0; b.len()]);
+                let r = random::bytes(b.len())
+                    .expect("OS random number generator failed; refusing to continue");
                 b.copy_from_slice(&r);
             };
             let (ek, dk) = mlkem::keygen(params, &mut rng);
@@ -528,7 +568,8 @@ fn keygen_blocking(kind: &str) -> ApiResult<KeygenResp> {
         }
         "rsa2048" => {
             let mut rng = |b: &mut [u8]| {
-                let r = random::bytes(b.len()).unwrap_or_else(|_| vec![0; b.len()]);
+                let r = random::bytes(b.len())
+                    .expect("OS random number generator failed; refusing to continue");
                 b.copy_from_slice(&r);
             };
             let sk = rsa_keygen::generate_rsa2048(&mut rng).map_err(|e| bad(e.to_string()))?;
@@ -577,7 +618,8 @@ async fn mlkem_encaps(Json(req): Json<EncapsReq>) -> ApiResult<Json<EncapsResp>>
     let params = mlkem_params(&req.param)?;
     let ek = de_hex(&req.ek_hex, "ek_hex")?;
     let mut rng = |b: &mut [u8]| {
-        let r = random::bytes(b.len()).unwrap_or_else(|_| vec![0; b.len()]);
+        let r = random::bytes(b.len())
+            .expect("OS random number generator failed; refusing to continue");
         b.copy_from_slice(&r);
     };
     let (k, ct) = mlkem::encaps(params, &ek, &mut rng).map_err(|e| bad(e.to_string()))?;
@@ -619,8 +661,14 @@ struct X25519Resp {
 async fn x25519(Json(req): Json<X25519Req>) -> ApiResult<Json<X25519Resp>> {
     let scalar = fixed::<32>(&de_hex(&req.scalar_hex, "scalar_hex")?, "scalar_hex")?;
     let point = fixed::<32>(&de_hex(&req.point_hex, "point_hex")?, "point_hex")?;
+    let shared = easylock_core::ec::x25519(&scalar, &point);
+    if shared == [0u8; 32] {
+        return Err(bad(
+            "peer public key has small order (all-zero shared secret)",
+        ));
+    }
     Ok(Json(X25519Resp {
-        shared_hex: hex::encode(&easylock_core::ec::x25519(&scalar, &point)),
+        shared_hex: hex::encode(&shared),
     }))
 }
 
@@ -824,5 +872,63 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(verified["valid"], true);
+    }
+
+    #[tokio::test]
+    async fn kdf_costs_are_capped() {
+        let (st, _) = post_json(
+            "/v1/kdf/argon2",
+            serde_json::json!({"password":"pw","m_cost":4_000_000_000u32,"t_cost":1,"parallelism":1}),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        let (st, _) = post_json(
+            "/v1/kdf/pbkdf2",
+            serde_json::json!({"password":"pw","salt_hex":"00","iterations":4_000_000_000u32}),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+        let (st, _) = post_json(
+            "/v1/kdf/pbkdf2",
+            serde_json::json!({"password":"pw","salt_hex":"00","iterations":1,"out_len":1_000_000}),
+        )
+        .await;
+        assert_eq!(st, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn no_cors_for_foreign_origins() {
+        let resp = app()
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/v1/keygen")
+                    .header("origin", "https://evil.example")
+                    .header("access-control-request-method", "POST")
+                    .header("access-control-request-headers", "content-type")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(resp.headers().get("access-control-allow-origin").is_none());
+    }
+
+    #[tokio::test]
+    async fn ed25519_small_order_forgery_is_rejected() {
+        let mut sig =
+            "5866666666666666666666666666666666666666666666666666666666666666".to_string();
+        sig.push_str("0100000000000000000000000000000000000000000000000000000000000000");
+        let (st, v) = post_json(
+            "/v1/ed25519/verify",
+            serde_json::json!({
+                "public_hex": "0100000000000000000000000000000000000000000000000000000000000000",
+                "message": "YW55IG1lc3NhZ2U=",
+                "sig_hex": sig
+            }),
+        )
+        .await;
+        assert_eq!(st, StatusCode::OK);
+        assert_eq!(v["valid"], serde_json::Value::Bool(false), "{v}");
     }
 }
