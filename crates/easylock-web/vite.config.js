@@ -8,6 +8,7 @@ export default defineConfig({
   base: "./",
   plugins: [tailwindcss()],
   server: { port: 5173 },
+  worker: { format: "es" },
   build: {
     outDir: "dist",
     emptyOutDir: true,
