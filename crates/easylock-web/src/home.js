@@ -161,14 +161,14 @@ function liveDemo() {
     size.textContent = `${pt.length} B → ${pt.length + 16} B`;
   };
   ta.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => update(false), 30); });
-  const newKey = h("button", { class: "btn-ghost !py-1 !text-[11px]" }, icon(ICONS.key, "h-3.5 w-3.5"), tx("demoNewKey"));
+  const newKey = h("button", { class: "btn-ghost shrink-0 whitespace-nowrap !py-1 !text-[11px]" }, icon(ICONS.key, "h-3.5 w-3.5"), tx("demoNewKey"));
   newKey.addEventListener("click", () => { key = api.random(32); update(true); });
   requestAnimationFrame(() => update(true));
 
   return h("div", { class: "demo" },
     h("div", { class: "flex items-center justify-between gap-2" },
-      h("div", { class: "flex items-center gap-2 text-[12px] font-semibold text-slate-200" },
-        h("span", { class: "live-dot" }), tx("demoTitle")),
+      h("div", { class: "flex min-w-0 items-center gap-2 text-[12px] font-semibold text-slate-200" },
+        h("span", { class: "live-dot shrink-0" }), tx("demoTitle")),
       h("div", { class: "flex items-center gap-2" }, size, newKey)),
     ta, ctRow, shaRow, b3Row,
     h("p", { class: "text-[11px] leading-relaxed text-slate-500" }, tx("demoNote")));

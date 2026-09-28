@@ -13,7 +13,7 @@ const REPO = "https://github.com/zlixas/easylock";
 const app = document.getElementById("app");
 const collapsed = new Set();
 let current = resolve(location.hash.slice(1));
-let sidebarEl, workspaceEl, statusLine, enginePill, mainEl, asideEl;
+let sidebarEl, workspaceEl, statusLine, titleEl, subEl, mainEl, asideEl;
 
 function resolve(id) {
   id = ALIASES[id] || id;
@@ -30,29 +30,30 @@ function langToggle() {
     }, l.label)));
 }
 
+const tile = (cat, emoji, cls = "") => h("span", { class: `tile t-${cat} ${cls}` }, emoji);
+
 function renderSidebar() {
   clear(sidebarEl);
   sidebarEl.append(h("button", {
-    class: "tree-cat" + (current === "home" ? " !text-accent-400" : ""),
+    class: "tree-cat" + (current === "home" ? " active" : ""),
     onClick: () => navigate("home"),
-  }, icon(ICONS.home, "h-4 w-4"), h("span", { class: "flex-1 text-left" }, t("nav.home"))));
+  }, h("span", { class: "tile t-home" }, icon(ICONS.home, "h-3.5 w-3.5 text-white")), h("span", { class: "flex-1 truncate text-left" }, t("nav.home"))));
 
   for (const cat of CATEGORIES) {
     const isOpen = !collapsed.has(cat.id);
     sidebarEl.append(h("button", {
-      class: "tree-cat",
+      class: "side-section",
       "aria-expanded": String(isOpen),
       onClick: () => { isOpen ? collapsed.add(cat.id) : collapsed.delete(cat.id); renderSidebar(); },
     },
-      h("span", { class: "w-4 text-center text-[13px]" }, cat.emoji),
       h("span", { class: "flex-1 text-left" }, t(cat.key)),
-      icon(ICONS.chevron, "h-3.5 w-3.5 text-slate-500 transition " + (isOpen ? "rotate-90" : ""))));
+      icon(ICONS.chevron, "chev h-3 w-3 " + (isOpen ? "rotate-90" : ""))));
     if (!isOpen) continue;
     for (const id of TOOL_IDS.filter((x) => META[x].cat === cat.id)) {
       sidebarEl.append(h("button", {
         class: "tree-leaf" + (id === current ? " active" : ""),
         onClick: () => navigate(id),
-      }, h("span", { class: "w-4 text-center text-[12px]" }, META[id].emoji),
+      }, tile(cat.id, META[id].emoji),
         h("span", { class: "flex-1 truncate text-left" }, L(META[id].name))));
     }
   }
@@ -144,8 +145,10 @@ function renderWorkspace() {
   }
   statusLine.textContent = "";
   mainEl.scrollTop = 0;
-  const name = current === "home" ? t("app.tagline") : L(META[current].name);
-  document.title = `${name} · easylock`;
+  const home = current === "home";
+  titleEl.textContent = home ? "easylock" : L(META[current].name);
+  subEl.textContent = home ? t("app.tagline") : META[current].spec;
+  document.title = `${home ? t("app.tagline") : L(META[current].name)} · easylock`;
 }
 
 function navigate(id) {
@@ -158,50 +161,55 @@ function navigate(id) {
 
 function layout() {
   clear(app);
-  sidebarEl = h("nav", { class: "space-y-0.5", "aria-label": "tools" });
+  sidebarEl = h("nav", { class: "space-y-px", "aria-label": "tools" });
   workspaceEl = h("div", { class: "min-h-full" });
-  statusLine = h("span", { class: "truncate font-mono text-[11px] text-slate-500" });
-  enginePill = h("span", { class: "hidden font-mono text-[11px] text-emerald-400 md:inline", title: api.buildInfo() },
-    `● easylock-core ${api.version()} · ${t("msg.engineReady")}`);
+  statusLine = h("span", { class: "st" });
+  titleEl = h("b");
+  subEl = h("span", { class: "sub" });
   bindStatus(statusLine);
 
-  const searchBtn = h("button", { class: "search-btn", onClick: openPalette },
-    icon(ICONS.search, "h-4 w-4"), h("span", { class: "hidden flex-1 text-left sm:inline" }, t("nav.search")),
-    h("kbd", { class: "hidden sm:inline" }, /Mac/.test(navigator.platform) ? "⌘K" : "Ctrl K"));
+  const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
+  const searchBtn = h("button", { class: "search-btn", onClick: openPalette, "aria-label": t("nav.search") },
+    icon(ICONS.search, "h-3.5 w-3.5"), h("span", { class: "hidden flex-1 text-left sm:inline" }, t("nav.search")),
+    h("kbd", { class: "hidden !shadow-none sm:inline" }, mod));
+  const tb = (path, label, onClick, cls = "") => h("button", { class: "tb-btn " + cls, "aria-label": label, title: label, onClick }, icon(path, "h-[18px] w-[18px]"));
 
   asideEl = h("aside", { class: "sidebar" },
-    sidebarEl,
-    h("div", { class: "mt-6 space-y-2 border-t border-obsidian-700 px-2.5 pt-4 text-[11px] text-slate-500" },
-      h("a", { class: "flex items-center gap-2 hover:text-slate-200", href: REPO, target: "_blank", rel: "noopener" },
+    h("div", { class: "traffic", "aria-hidden": "true" }, h("i"), h("i"), h("i")),
+    h("div", { class: "sidebar-scroll" },
+      h("button", { class: "mb-2 mt-1 flex w-full items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left", onClick: () => navigate("home") },
+        h("span", { class: "logo" }, "🔒"),
+        h("span", { class: "min-w-0 leading-tight" },
+          h("span", { class: "block text-[13px] font-semibold text-slate-100" }, "easylock"),
+          h("span", { class: "block truncate text-[11px] text-slate-500" }, "Version " + api.version()))),
+      sidebarEl),
+    h("div", { class: "space-y-0.5 border-t border-obsidian-700 px-2.5 py-2 text-[12px]" },
+      h("a", { class: "tree-cat !text-slate-400", href: REPO, target: "_blank", rel: "noopener" },
         icon(ICONS.github, "h-4 w-4"), t("nav.github")),
-      h("button", { class: "flex items-center gap-2 hover:text-slate-200", onClick: toggleHelp },
+      h("button", { class: "tree-cat !text-slate-400", onClick: toggleHelp },
         icon(ICONS.keyboard, "h-4 w-4"), t("kbd.title"))));
 
-  mainEl = h("main", { class: "flex-1 overflow-y-auto p-4 pb-40 sm:p-6 sm:pb-40" }, workspaceEl,
-    h("footer", { class: "mx-auto mt-16 flex max-w-6xl flex-wrap items-center justify-between gap-3 border-t border-obsidian-800 pt-5 text-[11px] text-slate-600" },
+  mainEl = h("main", { class: "flex-1 overflow-y-auto px-4 pb-40 pt-6 sm:px-8" }, workspaceEl,
+    h("footer", { class: "mx-auto mt-16 flex max-w-6xl flex-wrap items-center justify-between gap-3 border-t border-obsidian-700 pt-5 text-[11px] text-slate-500" },
       h("span", {}, "easylock · " + t("footer.built")),
-      h("span", { class: "flex gap-4" },
+      h("span", { class: "flex flex-wrap gap-4" },
         h("a", { class: "hover:text-slate-300", href: REPO, target: "_blank", rel: "noopener" }, "GitHub"),
         h("a", { class: "hover:text-slate-300", href: REPO + "/blob/main/SECURITY.md", target: "_blank", rel: "noopener" }, "Security"),
         h("span", {}, t("footer.license")),
-        h("span", { class: "text-amber-500/70" }, t("footer.audit")))));
+        h("span", { class: "text-amber-300" }, t("footer.audit")))));
 
-  app.append(h("div", { class: "flex h-screen flex-col" },
-    h("header", { class: "flex items-center justify-between gap-3 border-b border-obsidian-700 bg-obsidian-900 px-3 py-2.5 sm:px-5" },
-      h("div", { class: "flex items-center gap-3" },
-        h("button", { class: "btn-ghost !px-2 md:hidden", "aria-label": t("nav.menu"), onClick: () => document.body.classList.toggle("nav-open") },
-          icon(ICONS.menu, "h-5 w-5")),
-        h("button", { class: "flex items-center gap-2.5", onClick: () => navigate("home") },
-          h("span", { class: "logo" }, "🔒"),
-          h("span", { class: "text-left" },
-            h("span", { class: "block text-sm font-bold tracking-tight text-slate-100" }, "easylock"),
-            h("span", { class: "hidden text-[11px] text-slate-500 lg:block" }, t("app.tagline"))))),
-      h("div", { class: "flex items-center gap-3" }, searchBtn, enginePill, langToggle())),
-    h("div", { class: "relative flex flex-1 overflow-hidden" },
+  const toolbar = h("header", { class: "toolbar" },
+    tb(ICONS.menu, t("nav.menu"), () => document.body.classList.toggle("nav-open"), "md:hidden"),
+    tb("M15 6l-6 6 6 6", "Back", () => history.back()),
+    tb(ICONS.chevron, "Forward", () => history.forward(), "hidden sm:grid"),
+    h("div", { class: "tb-title" }, titleEl, subEl, statusLine),
+    h("div", { class: "flex shrink-0 items-center gap-2" }, searchBtn, langToggle()));
+
+  app.append(h("div", { class: "mac-desktop" },
+    h("div", { class: "mac-window" },
       h("div", { class: "scrim md:hidden", onClick: () => document.body.classList.remove("nav-open") }),
-      asideEl, mainEl),
-    h("div", { class: "flex items-center gap-4 border-t border-obsidian-700 bg-obsidian-900 px-5 py-1.5" },
-      statusLine, h("span", { class: "ml-auto hidden text-[11px] text-slate-600 sm:inline" }, "🔒 " + t("msg.noServer")))));
+      asideEl,
+      h("div", { class: "flex min-w-0 flex-1 flex-col" }, toolbar, mainEl))));
   mountClipboard(app);
 }
 

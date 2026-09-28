@@ -1,212 +1,454 @@
 @import "tailwindcss";
 
-/* Obsidian palette — sleek industrial dark. */
+/*
+ * macOS system-app look. Colour utilities used across the app (obsidian-*,
+ * slate-*, accent-*, …) are mapped to semantic tokens below, so every tool
+ * follows the system appearance: dark and light.
+ */
 @theme {
-  --color-obsidian-950: #0b0d10;
-  --color-obsidian-900: #0f1216;
-  --color-obsidian-850: #141821;
-  --color-obsidian-800: #191e28;
-  --color-obsidian-700: #232a37;
-  --color-obsidian-600: #2f3947;
-  --color-accent-400: #6bb7f0;
-  --color-accent-500: #3d8fd6;
-  --color-accent-600: #2f74b3;
+  --color-obsidian-950: var(--mac-window);
+  --color-obsidian-900: var(--mac-box);
+  --color-obsidian-850: var(--mac-field);
+  --color-obsidian-800: var(--mac-control);
+  --color-obsidian-700: var(--mac-separator);
+  --color-obsidian-600: var(--mac-separator-strong);
+
+  --color-slate-50: var(--mac-label);
+  --color-slate-100: var(--mac-label);
+  --color-slate-200: var(--mac-label-2);
+  --color-slate-300: var(--mac-label-2);
+  --color-slate-400: var(--mac-label-3);
+  --color-slate-500: var(--mac-label-4);
+  --color-slate-600: var(--mac-label-5);
+
+  --color-accent-400: var(--mac-link);
+  --color-accent-500: var(--mac-accent);
+  --color-accent-600: var(--mac-accent);
+
+  --color-emerald-200: var(--mac-green-text);
+  --color-emerald-300: var(--mac-green-text);
+  --color-emerald-400: var(--mac-green);
+  --color-emerald-500: var(--mac-green);
+  --color-sky-200: var(--mac-blue-text);
+  --color-sky-300: var(--mac-blue-text);
+  --color-violet-200: var(--mac-purple-text);
+  --color-violet-300: var(--mac-purple-text);
+  --color-fuchsia-300: var(--mac-pink-text);
+  --color-amber-200: var(--mac-orange-text);
+  --color-amber-300: var(--mac-orange-text);
+  --color-red-300: var(--mac-red-text);
+  --color-red-400: var(--mac-red);
+  --color-rose-300: var(--mac-red-text);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* ------------------------------------------------------------ tokens */
+
+:root {
+  color-scheme: light;
+  --mac-wallpaper:
+    radial-gradient(70rem 50rem at 10% 0%, #9ec5ff 0%, transparent 60%),
+    radial-gradient(60rem 50rem at 100% 20%, #f7b7d8 0%, transparent 55%),
+    radial-gradient(70rem 60rem at 50% 110%, #b9a6ff 0%, transparent 60%),
+    #dfe6f3;
+  --mac-window: #f5f5f7;
+  --mac-content: #f5f5f7;
+  --mac-sidebar: rgb(232 232 237 / .80);
+  --mac-toolbar: rgb(245 245 247 / .85);
+  --mac-box: #ffffff;
+  --mac-field: #ffffff;
+  --mac-control: #ffffff;
+  --mac-separator: rgb(0 0 0 / .10);
+  --mac-separator-strong: rgb(0 0 0 / .18);
+  --mac-label: #1d1d1f;
+  --mac-label-2: #3a3a3c;
+  --mac-label-3: #6e6e73;
+  --mac-label-4: #86868b;
+  --mac-label-5: #aeaeb2;
+  --mac-accent: #007aff;
+  --mac-link: #0066d6;
+  --mac-green: #28a745;
+  --mac-green-text: #1f7a36;
+  --mac-blue-text: #0a5fb4;
+  --mac-purple-text: #7a3fc4;
+  --mac-pink-text: #b0268f;
+  --mac-orange-text: #a35a00;
+  --mac-red: #d70015;
+  --mac-red-text: #c4001a;
+  --mac-seg-active: #ffffff;
+  --mac-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 22px 70px rgb(0 0 0 / .28), 0 8px 20px rgb(0 0 0 / .10);
+  --mac-btn-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 1px 1.5px rgb(0 0 0 / .08);
+  --mac-box-shadow: 0 0 0 .5px rgb(0 0 0 / .08), 0 1px 3px rgb(0 0 0 / .05);
+  --mac-lift-shadow: 0 0 0 .5px rgb(0 0 0 / .14), 0 6px 18px rgb(0 0 0 / .10);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --mac-wallpaper:
+      radial-gradient(70rem 50rem at 0% 0%, #1b3b7a 0%, transparent 60%),
+      radial-gradient(60rem 50rem at 100% 10%, #5a1f63 0%, transparent 55%),
+      radial-gradient(70rem 60rem at 50% 120%, #2a1d6b 0%, transparent 60%),
+      #0c0e1a;
+    --mac-window: #1e1e1e;
+    --mac-content: #1e1e1e;
+    --mac-sidebar: rgb(44 44 48 / .72);
+    --mac-toolbar: rgb(30 30 30 / .82);
+    --mac-box: #2a2a2c;
+    --mac-field: #1c1c1e;
+    --mac-control: #48484a;
+    --mac-separator: rgb(255 255 255 / .10);
+    --mac-separator-strong: rgb(255 255 255 / .18);
+    --mac-label: #f5f5f7;
+    --mac-label-2: #dcdcde;
+    --mac-label-3: #a1a1a6;
+    --mac-label-4: #8d8d93;
+    --mac-label-5: #636366;
+    --mac-accent: #0a84ff;
+    --mac-link: #409cff;
+    --mac-green: #30d158;
+    --mac-green-text: #63e08a;
+    --mac-blue-text: #64b5ff;
+    --mac-purple-text: #c89bff;
+    --mac-pink-text: #ff8ad8;
+    --mac-orange-text: #ffc15e;
+    --mac-red: #ff453a;
+    --mac-red-text: #ff7b73;
+    --mac-seg-active: #636366;
+    --mac-shadow: 0 0 0 1px rgb(0 0 0 / .6), inset 0 0 0 .5px rgb(255 255 255 / .14), 0 26px 80px rgb(0 0 0 / .55);
+    --mac-btn-shadow: inset 0 .5px 0 rgb(255 255 255 / .14), 0 0 0 .5px rgb(0 0 0 / .4), 0 1px 1px rgb(0 0 0 / .2);
+    --mac-box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .07);
+    --mac-lift-shadow: inset 0 0 0 .5px rgb(255 255 255 / .16), 0 6px 18px rgb(0 0 0 / .3);
+  }
+}
+
+/* ------------------------------------------------------------ base */
+
 @layer base {
-  html { color-scheme: dark; }
-  body { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--color-obsidian-950); }
-  ::selection { background: var(--color-accent-600); color: #fff; }
-  * { scrollbar-width: thin; scrollbar-color: var(--color-obsidian-600) transparent; }
-  *::-webkit-scrollbar { width: 8px; height: 8px; }
-  *::-webkit-scrollbar-thumb { background: var(--color-obsidian-600); border-radius: 4px; }
-  :focus-visible { outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    background: var(--mac-window);
+    color: var(--mac-label);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (min-width: 1024px) {
+    body { background: var(--mac-wallpaper); background-attachment: fixed; }
+  }
+  ::selection { background: color-mix(in srgb, var(--mac-accent) 35%, transparent); }
+  * { scrollbar-width: thin; scrollbar-color: var(--mac-separator-strong) transparent; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: var(--mac-separator-strong); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+  :focus-visible { outline: 3px solid color-mix(in srgb, var(--mac-accent) 50%, transparent); outline-offset: 1px; }
   kbd {
-    @apply rounded border border-obsidian-600 bg-obsidian-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-400;
+    @apply rounded-[4px] px-1.5 py-px font-sans text-[11px] font-medium;
+    background: var(--mac-control); color: var(--mac-label-3); box-shadow: var(--mac-btn-shadow);
   }
 }
 
 @layer components {
-  .field {
-    @apply w-full rounded-md bg-obsidian-850 border border-obsidian-700 px-3 py-2
-           text-sm text-slate-100 placeholder:text-slate-500
-           focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/40;
-  }
-  .btn {
-    @apply inline-flex items-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm
-           font-semibold text-white transition hover:bg-accent-500
-           disabled:opacity-50 disabled:cursor-wait;
-  }
-  .btn-ghost {
-    @apply inline-flex items-center gap-2 rounded-md border border-obsidian-700
-           bg-obsidian-800 px-3 py-1.5 text-xs font-medium text-slate-300
-           transition hover:border-accent-500 hover:text-white;
-  }
-  .card {
-    @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 p-5 shadow-lg shadow-black/30;
-  }
-  .out {
-    @apply block w-full rounded-md border border-obsidian-700 bg-obsidian-850 p-3
-           font-mono text-[12.5px] leading-relaxed break-all whitespace-pre-wrap
-           text-emerald-300 min-h-[2.5rem] cursor-copy;
-  }
-  .label { @apply block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5; }
-  .chip {
-    @apply inline-block rounded-full border border-obsidian-600 bg-obsidian-800 px-2.5 py-0.5
-           font-mono text-[11px] text-slate-400;
-  }
-  .seg { @apply inline-flex shrink-0 overflow-hidden rounded-md border border-obsidian-700 bg-obsidian-800; }
-  .seg > button { @apply px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:text-white; }
-  .seg > button.active { @apply bg-accent-600 text-white; }
+  /* ------------------------------------------------------------ window chrome */
 
-  .kv { @apply flex items-center gap-3 rounded-md border border-obsidian-700 bg-obsidian-850 px-3 py-2; }
-  .kv-k { @apply w-32 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500; }
-  .kv-v { @apply min-w-0 flex-1 break-all text-[12.5px] text-emerald-300; }
+  .mac-desktop { @apply flex h-dvh flex-col; }
+  @media (min-width: 1024px) {
+    .mac-desktop { padding: 22px 26px 26px; }
+  }
+  .mac-window {
+    @apply relative flex min-h-0 flex-1 overflow-hidden;
+    background: var(--mac-content);
+  }
+  @media (min-width: 1024px) {
+    .mac-window { border-radius: 12px; box-shadow: var(--mac-shadow); }
+  }
+
+  .sidebar {
+    @apply flex w-[248px] shrink-0 flex-col overflow-hidden;
+    background: var(--mac-sidebar);
+    backdrop-filter: blur(40px) saturate(1.8);
+    -webkit-backdrop-filter: blur(40px) saturate(1.8);
+    border-right: .5px solid var(--mac-separator);
+  }
+  @media (min-width: 1024px) {
+    /* The inset "floating" sidebar of recent macOS versions. */
+    .sidebar { margin: 8px 0 8px 8px; border-radius: 10px; border: .5px solid var(--mac-separator); }
+  }
+  .sidebar-scroll { @apply flex-1 overflow-y-auto px-2.5 pb-3; }
+
+  .traffic { @apply flex items-center gap-2 px-4 pb-2 pt-[14px]; }
+  .traffic > i { @apply block h-3 w-3 rounded-full; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .18); }
+  .traffic > i:nth-child(1) { background-color: #ff5f57; }
+  .traffic > i:nth-child(2) { background-color: #febc2e; }
+  .traffic > i:nth-child(3) { background-color: #28c840; }
+
+  .side-section {
+    @apply mt-3 flex w-full items-center gap-1 rounded-md px-2 pb-1 pt-1 text-[11px] font-semibold;
+    color: var(--mac-label-4);
+  }
+  .side-section .chev { opacity: 0; transition: opacity .15s, transform .15s; }
+  .side-section:hover .chev, .side-section:focus-visible .chev { opacity: 1; }
+
+  .tree-cat, .tree-leaf {
+    @apply flex w-full items-center gap-2 rounded-[7px] px-2 py-[5px] text-[13px];
+    color: var(--mac-label);
+  }
+  .tree-cat:hover, .tree-leaf:hover { background: color-mix(in srgb, var(--mac-label) 6%, transparent); }
+  .tree-leaf.active, .tree-cat.active { background: var(--mac-accent); color: #fff; }
+  .tree-leaf.active .tile, .tree-cat.active .tile { box-shadow: 0 0 0 1px rgb(255 255 255 / .4); }
+
+  /* System Settings-style coloured icon tiles. */
+  .tile {
+    @apply grid h-[22px] w-[22px] shrink-0 place-items-center rounded-[6px] text-[12px] leading-none;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 78%, white), var(--tile));
+    box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12);
+  }
+  .tile-lg { @apply h-10 w-10 rounded-[10px] text-[22px]; }
+  .t-sym { --tile: #0a84ff; }
+  .t-asym { --tile: #ff9f0a; }
+  .t-hash { --tile: #bf5af2; }
+  .t-pipe { --tile: #30b0c7; }
+  .t-util { --tile: #34c759; }
+  .t-home { --tile: #8e8e93; }
+
+  .toolbar {
+    @apply z-20 flex h-[52px] shrink-0 items-center gap-1.5 px-3 sm:px-4;
+    background: var(--mac-toolbar);
+    backdrop-filter: blur(30px) saturate(1.8);
+    -webkit-backdrop-filter: blur(30px) saturate(1.8);
+    border-bottom: .5px solid var(--mac-separator);
+  }
+  .tb-btn {
+    @apply grid h-7 w-7 shrink-0 place-items-center rounded-[6px] transition;
+    color: var(--mac-label-3);
+  }
+  .tb-btn:hover { background: color-mix(in srgb, var(--mac-label) 7%, transparent); color: var(--mac-label); }
+  .tb-title { @apply ml-1 min-w-0 flex-1 leading-tight; }
+  .tb-title > b { @apply block truncate text-[15px] font-bold; color: var(--mac-label); }
+  .tb-title > span { @apply block truncate text-[11px]; color: var(--mac-label-4); }
+  .tb-title:has(.st:not(:empty)) > .sub, .tb-title > .st:empty { display: none; }
+  .tb-title > span.err { color: var(--mac-red); }
+  .tb-title > span.ok { color: var(--mac-green); }
+
+  .search-btn {
+    @apply flex items-center gap-1.5 rounded-[7px] px-2 py-[5px] text-[13px] transition sm:w-52;
+    background: color-mix(in srgb, var(--mac-label) 6%, transparent);
+    color: var(--mac-label-4);
+    box-shadow: inset 0 0 0 .5px var(--mac-separator);
+  }
+  .search-btn:hover { color: var(--mac-label-3); }
+
+  /* ------------------------------------------------------------ controls */
+
+  .field {
+    @apply w-full rounded-[6px] px-2.5 py-[6px] text-[13px] transition;
+    background: var(--mac-field);
+    color: var(--mac-label);
+    box-shadow: inset 0 0 0 .5px var(--mac-separator-strong), 0 .5px 1px rgb(0 0 0 / .05);
+  }
+  .field::placeholder { color: var(--mac-label-5); }
+  .field:focus { outline: none; box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--mac-accent) 45%, transparent), inset 0 0 0 .5px var(--mac-accent); }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[6px] px-3 py-[5px] text-[13px] font-medium text-white transition;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--mac-accent) 85%, white), var(--mac-accent));
+    box-shadow: 0 0 0 .5px color-mix(in srgb, var(--mac-accent) 60%, black), 0 1px 1.5px rgb(0 0 0 / .15);
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:active { filter: brightness(.92); }
+  .btn:disabled { opacity: .5; cursor: wait; }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[6px] px-2.5 py-[4px] text-[12px] font-medium transition;
+    background: var(--mac-control);
+    color: var(--mac-label);
+    box-shadow: var(--mac-btn-shadow);
+  }
+  .btn-ghost:hover { filter: brightness(.97); }
+  .btn-ghost:active { filter: brightness(.92); }
+  .btn-lg { @apply !px-4 !py-[7px] !text-[13px]; }
+
+  /* Grouped "inset" box like System Settings. */
+  .card {
+    @apply rounded-[10px] p-4;
+    background: var(--mac-box);
+    box-shadow: var(--mac-box-shadow);
+  }
+  .card-hover { @apply transition; }
+  .card-hover:hover { box-shadow: var(--mac-lift-shadow); }
+
+  .out {
+    @apply block min-h-[2.5rem] w-full cursor-copy whitespace-pre-wrap break-all rounded-[6px] p-2.5 font-mono text-[12px] leading-relaxed;
+    background: var(--mac-field);
+    color: var(--mac-green-text);
+    box-shadow: inset 0 0 0 .5px var(--mac-separator-strong);
+  }
+  .label { @apply mb-1.5 block text-[12px] font-medium; color: var(--mac-label-3); }
+  .chip {
+    @apply inline-block rounded-full px-2 py-px font-mono text-[11px];
+    background: color-mix(in srgb, var(--mac-label) 7%, transparent);
+    color: var(--mac-label-3);
+  }
+
+  /* Segmented control: a raised thumb on a grey track. */
+  .seg {
+    @apply inline-flex shrink-0 gap-px rounded-[7px] p-[2px];
+    background: color-mix(in srgb, var(--mac-label) 8%, transparent);
+  }
+  .seg > button {
+    @apply rounded-[5px] px-3 py-[3px] text-[12px] font-medium transition;
+    color: var(--mac-label-2);
+  }
+  .seg > button:hover:not(.active) { background: color-mix(in srgb, var(--mac-label) 5%, transparent); }
+  .seg > button.active {
+    background: var(--mac-seg-active); color: var(--mac-label);
+    box-shadow: 0 0 0 .5px rgb(0 0 0 / .10), 0 1px 2px rgb(0 0 0 / .14);
+  }
+
+  .kv {
+    @apply flex items-center gap-3 rounded-[8px] px-3 py-2;
+    background: var(--mac-box);
+    box-shadow: inset 0 0 0 .5px var(--mac-separator);
+  }
+  .kv-k { @apply w-32 shrink-0 text-[12px] font-medium; color: var(--mac-label-3); }
+  .kv-v { @apply min-w-0 flex-1 break-all font-mono text-[12px]; color: var(--mac-green-text); }
 
   .drop {
-    @apply flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-dashed border-obsidian-600
-           bg-obsidian-850/60 px-4 py-6 text-center text-xs text-slate-500 transition hover:border-accent-500;
+    @apply flex cursor-pointer flex-col items-center gap-1.5 rounded-[10px] px-4 py-7 text-center text-[12px] transition;
+    border: 1.5px dashed var(--mac-separator-strong);
+    color: var(--mac-label-4);
   }
-  .drop.hot { @apply border-accent-500 bg-accent-600/10 text-slate-200; }
+  .drop:hover, .drop.hot { border-color: var(--mac-accent); color: var(--mac-label-2); background: color-mix(in srgb, var(--mac-accent) 8%, transparent); }
 
-  .learn { @apply rounded-xl border border-accent-600/30 bg-accent-600/5; }
+  .learn { @apply rounded-[10px]; background: var(--mac-box); box-shadow: var(--mac-box-shadow); }
   .learn > summary {
-    @apply flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-accent-400 select-none;
+    @apply flex cursor-pointer list-none select-none items-center gap-2 px-4 py-3 text-[13px] font-semibold;
+    color: var(--mac-link);
   }
   .learn > summary::-webkit-details-marker { display: none; }
 
-  .tree-cat {
-    @apply flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm font-semibold
-           text-slate-300 transition hover:bg-obsidian-800;
-  }
-  .tree-leaf {
-    @apply flex w-full items-center gap-2 rounded-md py-1.5 pl-6 pr-2.5 text-[13px]
-           text-slate-400 transition hover:bg-obsidian-800 hover:text-slate-100;
-  }
-  .tree-leaf.active { @apply bg-accent-600/15 text-accent-400; box-shadow: inset 2px 0 0 var(--color-accent-500); }
-
-  .sidebar {
-    @apply w-64 shrink-0 overflow-y-auto border-r border-obsidian-700 bg-obsidian-900 p-3;
-  }
   @media (max-width: 767px) {
-    .sidebar { position: absolute; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%); transition: transform .2s ease; }
-    body.nav-open .sidebar { transform: none; }
-    .scrim { position: absolute; inset: 0; z-index: 30; background: rgb(0 0 0 / .5); display: none; }
+    .sidebar { position: absolute; inset: 0 auto 0 0; z-index: 40; transform: translateX(-100%); transition: transform .22s ease; background: var(--mac-window); }
+    body.nav-open .sidebar { transform: none; box-shadow: 0 0 40px rgb(0 0 0 / .3); }
+    .scrim { position: absolute; inset: 0; z-index: 30; background: rgb(0 0 0 / .3); display: none; }
     body.nav-open .scrim { display: block; }
   }
 
-  .search-btn {
-    @apply flex items-center gap-2 rounded-md border border-obsidian-700 bg-obsidian-850 px-2.5 py-1.5
-           text-xs text-slate-500 transition hover:border-accent-500 hover:text-slate-300 sm:w-56;
+  /* Spotlight-style palette and sheets. */
+  .overlay { @apply fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[14vh]; background: rgb(0 0 0 / .18); }
+  .dialog {
+    @apply w-full overflow-hidden rounded-[14px];
+    background: color-mix(in srgb, var(--mac-window) 84%, transparent);
+    backdrop-filter: blur(40px) saturate(1.8);
+    -webkit-backdrop-filter: blur(40px) saturate(1.8);
+    box-shadow: var(--mac-shadow);
   }
-  .overlay { @apply fixed inset-0 z-[60] flex items-start justify-center bg-black/60 px-4 pt-[12vh] backdrop-blur-sm; }
-  .dialog { @apply w-full overflow-hidden rounded-xl border border-obsidian-600 bg-obsidian-900 shadow-2xl shadow-black/60; }
-  .pal-item { @apply flex w-full items-center gap-3 rounded-md px-3 py-2; }
-  .pal-item.active { @apply bg-accent-600/20; }
+  .pal-item { @apply flex w-full items-center gap-3 rounded-[8px] px-3 py-2; }
+  .pal-item.active { background: var(--mac-accent); }
+  .pal-item.active * { color: #fff !important; }
+  .pal-item.active .chip { background: rgb(255 255 255 / .2); }
 
   .logo {
-    @apply grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent-500 to-indigo-600 text-base shadow-lg shadow-accent-600/30;
+    @apply grid h-8 w-8 place-items-center rounded-[8px] text-base;
+    background: linear-gradient(180deg, #4aa3ff, #0a64d6);
+    box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .2);
   }
-  /* ---- landing page ---- */
+
+  /* ------------------------------------------------------------ home */
+
   .hero {
-    @apply relative overflow-hidden rounded-3xl border border-obsidian-700 p-6 sm:p-10 lg:p-12;
+    @apply relative overflow-hidden rounded-[14px] p-6 sm:p-9;
     background:
-      radial-gradient(50rem 26rem at 100% -10%, rgb(61 143 214 / .28), transparent 60%),
-      radial-gradient(40rem 24rem at -10% 110%, rgb(139 92 246 / .20), transparent 60%),
-      radial-gradient(30rem 16rem at 60% 120%, rgb(16 185 129 / .10), transparent 60%),
-      var(--color-obsidian-900);
+      radial-gradient(40rem 20rem at 100% 0%, color-mix(in srgb, var(--mac-accent) 16%, transparent), transparent 65%),
+      radial-gradient(30rem 18rem at 0% 100%, color-mix(in srgb, #bf5af2 12%, transparent), transparent 65%),
+      var(--mac-box);
+    box-shadow: var(--mac-box-shadow);
   }
-  .hero-grid {
-    position: absolute; inset: 0; pointer-events: none; opacity: .35;
-    background-image:
-      linear-gradient(to right, rgb(255 255 255 / .05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(255 255 255 / .05) 1px, transparent 1px);
-    background-size: 36px 36px;
-    mask-image: radial-gradient(ellipse at 70% 20%, black, transparent 70%);
-  }
+  .hero-grid { display: none; }
   .eyebrow {
-    @apply inline-flex items-center gap-2 rounded-full border border-obsidian-600 bg-obsidian-850/80 py-1 pl-1 pr-3
-           text-[11px] font-medium text-slate-300 backdrop-blur transition hover:border-accent-500;
+    @apply inline-flex items-center gap-2 rounded-full py-[3px] pl-[3px] pr-3 text-[12px] font-medium transition;
+    background: color-mix(in srgb, var(--mac-label) 6%, transparent);
+    color: var(--mac-label-2);
   }
+  .eyebrow:hover { background: color-mix(in srgb, var(--mac-label) 10%, transparent); }
   .grad-text {
-    background: linear-gradient(90deg, #6bb7f0, #a78bfa 45%, #34d399);
-    background-size: 200% auto;
+    background: linear-gradient(90deg, #0a84ff, #bf5af2 55%, #ff375f);
     -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: shine 8s linear infinite;
   }
-  @keyframes shine { to { background-position: 200% center; } }
-  .btn-lg { @apply !px-5 !py-2.5 !text-sm; }
   .demo {
-    @apply relative space-y-3 rounded-2xl border border-obsidian-600 bg-obsidian-950/80 p-4 shadow-2xl shadow-black/50 backdrop-blur sm:p-5;
-  }
-  .demo::before {
-    content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: 1rem;
-    background: linear-gradient(135deg, rgb(61 143 214 / .6), transparent 40%, rgb(167 139 250 / .5));
-    filter: blur(14px); opacity: .45;
+    @apply relative space-y-3 rounded-[12px] p-4 sm:p-5;
+    background: var(--mac-window);
+    box-shadow: 0 0 0 .5px var(--mac-separator-strong), 0 12px 32px rgb(0 0 0 / .14);
   }
   .demo-val {
-    @apply rounded-md border border-obsidian-700 bg-obsidian-900 px-2.5 py-2 font-mono text-[11px] leading-snug break-all;
+    @apply break-all rounded-[6px] px-2.5 py-2 font-mono text-[11px] leading-snug;
     min-height: 2.2rem; max-height: 5.2rem; overflow-y: auto;
+    background: var(--mac-field);
+    box-shadow: inset 0 0 0 .5px var(--mac-separator-strong);
   }
-  .live-dot { @apply relative inline-block h-2 w-2 rounded-full bg-emerald-400; }
+  .live-dot { @apply relative inline-block h-2 w-2 rounded-full; background: var(--mac-green); }
   .live-dot::after {
     content: ""; position: absolute; inset: 0; border-radius: 9999px; background: inherit;
     animation: ping 1.6s cubic-bezier(0, 0, .2, 1) infinite;
   }
   @keyframes ping { 75%, 100% { transform: scale(2.4); opacity: 0; } }
   .copy-btn {
-    @apply inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal
-           text-slate-500 transition hover:bg-obsidian-700 hover:text-slate-200;
+    @apply inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-normal normal-case tracking-normal transition;
+    color: var(--mac-label-4);
   }
-  .copy-btn.ok { @apply text-emerald-400; }
-  .stat {
-    @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 px-4 py-4 transition hover:border-obsidian-600;
+  .copy-btn:hover { background: color-mix(in srgb, var(--mac-label) 7%, transparent); color: var(--mac-label); }
+  .copy-btn.ok { color: var(--mac-green); }
+  .stat { @apply rounded-[10px] px-4 py-3.5; background: var(--mac-box); box-shadow: var(--mac-box-shadow); }
+  .stat-n { @apply text-[22px] font-bold tracking-tight tabular-nums; color: var(--mac-label); }
+  .stat-l { @apply mt-0.5 text-[11px]; color: var(--mac-label-4); }
+  .section-title { @apply text-[20px] font-bold tracking-tight; color: var(--mac-label); }
+  .goal {
+    @apply flex items-center gap-3 rounded-[10px] p-3 transition;
+    background: var(--mac-box); box-shadow: var(--mac-box-shadow);
   }
-  .stat-n { @apply text-2xl font-extrabold tracking-tight text-slate-50 tabular-nums; }
-  .stat-l { @apply mt-0.5 text-[11px] uppercase tracking-wide text-slate-500; }
-  .section-title { @apply text-2xl font-bold tracking-tight text-slate-50; }
-  .goal-emoji { @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-obsidian-800 text-xl; }
+  .goal:hover { box-shadow: var(--mac-lift-shadow); }
+  .goal:active { transform: scale(.99); }
+  .goal-emoji { @apply grid h-9 w-9 shrink-0 place-items-center rounded-[9px] text-lg; background: color-mix(in srgb, var(--mac-label) 6%, transparent); }
   .term {
-    @apply flex items-center gap-1 rounded-lg border border-obsidian-700 bg-obsidian-950 px-3 py-2.5 font-mono text-[12px] text-slate-200;
+    @apply flex items-center gap-1 rounded-[8px] px-3 py-2.5 font-mono text-[12px];
+    background: #1d1f21; color: #e6e6e6;
+    box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .08);
   }
+  .term .text-slate-600, .term .text-slate-400 { color: #8a8f98 !important; }
+  .term .copy-btn { color: #8a8f98; }
+  .term .copy-btn:hover { color: #fff; background: rgb(255 255 255 / .1); }
   .dl-btn {
-    @apply flex items-center gap-2.5 rounded-lg border border-obsidian-700 bg-obsidian-850 px-3 py-2.5 text-sm font-medium
-           text-slate-200 transition hover:-translate-y-0.5 hover:border-accent-500 hover:text-white;
+    @apply flex items-center gap-2.5 rounded-[8px] px-3 py-2 text-[13px] font-medium transition;
+    background: var(--mac-control); color: var(--mac-label); box-shadow: var(--mac-btn-shadow);
   }
-  .bar { @apply relative h-2.5 overflow-hidden rounded-full bg-obsidian-800; }
+  .dl-btn:hover { filter: brightness(.97); }
+  .bar { @apply relative h-2 overflow-hidden rounded-full; background: color-mix(in srgb, var(--mac-label) 8%, transparent); }
   .bar-old, .bar-new { position: absolute; inset: 0 auto 0 0; border-radius: 9999px; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
-  .bar-old { @apply bg-obsidian-600; z-index: 1; }
-  .bar-new { background: linear-gradient(90deg, var(--color-accent-500), #34d399); }
+  .bar-old { z-index: 1; background: var(--mac-label-5); }
+  .bar-new { background: linear-gradient(90deg, var(--mac-accent), var(--mac-green)); }
   .reveal.in .bar-new, .reveal.in .bar-old { width: var(--w); }
   .reveal.in .bar-new { transition-delay: .25s; }
   .legend { @apply inline-block h-2 w-4 rounded-full; }
   .elk-strip { @apply flex gap-1 overflow-x-auto pb-1; }
-  .elk-cell {
-    @apply flex min-w-[5.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-3 text-center;
-  }
-  .c-slate { @apply border-slate-500/30 bg-slate-500/10 text-slate-300; }
-  .c-amber { @apply border-amber-400/40 bg-amber-400/10 text-amber-200; }
-  .c-violet { @apply border-violet-400/40 bg-violet-400/10 text-violet-200; }
-  .c-sky { @apply border-sky-400/40 bg-sky-400/10 text-sky-200; }
-  .c-emerald { @apply border-emerald-400/30 bg-emerald-400/10 text-emerald-200; }
-  .step-n { @apply grid h-6 w-6 place-items-center rounded-full bg-accent-600/20 font-mono text-[11px] text-accent-400; }
-  .icon-tile { @apply grid h-7 w-7 place-items-center rounded-md bg-accent-600/15 text-accent-400; }
-  .card-hover { @apply transition hover:-translate-y-0.5 hover:border-obsidian-600; }
-  .faq { @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 transition open:border-obsidian-600; }
-  .faq > summary {
-    @apply flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 text-sm font-semibold text-slate-100 select-none;
-  }
+  .elk-cell { @apply flex min-w-[5.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-[7px] px-2 py-3 text-center; }
+  .c-slate { background: color-mix(in srgb, var(--mac-label) 7%, transparent); color: var(--mac-label-2); }
+  .c-amber { background: color-mix(in srgb, #ff9f0a 16%, transparent); color: var(--mac-orange-text); }
+  .c-violet { background: color-mix(in srgb, #bf5af2 16%, transparent); color: var(--mac-purple-text); }
+  .c-sky { background: color-mix(in srgb, #0a84ff 16%, transparent); color: var(--mac-blue-text); }
+  .c-emerald { background: color-mix(in srgb, #30d158 15%, transparent); color: var(--mac-green-text); }
+  .step-n { @apply grid h-5 w-5 place-items-center rounded-full text-[11px] font-bold text-white; background: var(--mac-accent); }
+  .icon-tile { @apply grid h-7 w-7 place-items-center rounded-[7px] text-white; background: linear-gradient(180deg, #4aa3ff, #0a64d6); }
+  .faq { @apply overflow-hidden rounded-[10px]; background: var(--mac-box); box-shadow: var(--mac-box-shadow); }
+  .faq > summary { @apply flex cursor-pointer list-none select-none items-center gap-3 px-4 py-3 text-[13px] font-medium; color: var(--mac-label); }
   .faq > summary::-webkit-details-marker { display: none; }
   .faq[open] .faq-chev { transform: rotate(90deg); }
   .faq-chev { transition: transform .2s; }
-  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal { opacity: 0; transform: translateY(10px); transition: opacity .5s ease, transform .5s ease; }
   .reveal.in { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; transition: none; }
-    .grad-text, .live-dot::after { animation: none; }
-  }
-  .goal {
-    @apply flex items-center gap-3 rounded-xl border border-obsidian-700 bg-obsidian-900/70 p-3.5
-           transition hover:-translate-y-0.5 hover:border-accent-500 hover:bg-obsidian-850;
+    .live-dot::after { animation: none; }
   }
 }

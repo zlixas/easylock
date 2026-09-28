@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
 - README (EN/TR/ES): banner, feature grid, per-platform install table with direct downloads, screenshots, FAQ and roadmap.
 
 ### Changed
+- Website: redesigned as a **macOS-style app**: a window with traffic lights over a wallpaper, a translucent inset sidebar
+  with System Settings-style coloured icon tiles, a unified toolbar (back/forward, title and live status), native-looking
+  buttons, fields and segmented controls, Spotlight-style search, and **light and dark mode** that follow the system.
 - Website: the clipboard dock starts folded and opens on the first result, so it never covers the page.
 
 ## [0.2.0] - 2026-09-28

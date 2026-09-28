@@ -65,8 +65,8 @@ Resmî NIST/RFC vektörleri, **1.485 Wycheproof** uç durumu, fuzz testleri, kar
 </table>
 
 <div align="center">
-<a href="https://zlixas.github.io/easylock/"><img src="docs/images/web-home.png" alt="easylock web" width="100%"></a>
-<sub>Ana sayfa, yazdığınızı WebAssembly'e derlenmiş Rust motoruyla canlı olarak şifreler ve özetler.</sub>
+<a href="https://zlixas.github.io/easylock/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/web-home-light.png"><img src="docs/images/web-home.png" alt="easylock web" width="100%"></picture></a>
+<sub>Tarayıcınızda açık ve koyu temalı macOS tarzı bir uygulama. Ana sayfa, yazdığınızı WebAssembly'e derlenmiş Rust motoruyla canlı olarak şifreler ve özetler.</sub>
 </div>
 
 > [!WARNING]
