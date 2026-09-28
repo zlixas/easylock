@@ -76,8 +76,8 @@ Official NIST/RFC vectors, **1,485 Wycheproof** edge cases, fuzzing, differentia
 </table>
 
 <div align="center">
-<a href="https://zlixas.github.io/easylock/"><img src="docs/images/web-home.png" alt="The easylock web app: a live encryption demo on the home page" width="100%"></a>
-<sub>The home page encrypts and hashes what you type, live, using the Rust engine compiled to WebAssembly.</sub>
+<a href="https://zlixas.github.io/easylock/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/web-home-light.png"><img src="docs/images/web-home.png" alt="The easylock web app: a live encryption demo on the home page" width="100%"></picture></a>
+<sub>A macOS-style app in your browser, in light and dark mode. The home page encrypts and hashes what you type, live, using the Rust engine compiled to WebAssembly.</sub>
 </div>
 
 > [!WARNING]

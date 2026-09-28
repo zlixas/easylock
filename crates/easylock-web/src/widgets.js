@@ -11,7 +11,7 @@ export function status(msg, kind = "") {
   if (!statusEl) return;
   statusEl.textContent = msg;
   statusEl.className =
-    "truncate font-mono text-[11px] " +
+    "st block truncate font-mono text-[11px] " +
     (kind === "err" ? "text-red-400" : kind === "ok" ? "text-emerald-400" : "text-slate-500");
 }
 
@@ -189,8 +189,8 @@ export function toolView(id, ...sections) {
   return h("div", { class: "mx-auto max-w-3xl space-y-5" },
     h("header", { class: "space-y-2" },
       h("div", { class: "flex flex-wrap items-center gap-3" },
-        h("span", { class: "text-2xl" }, meta.emoji),
-        h("h1", { class: "text-xl font-semibold text-slate-100" }, L(meta.name)),
+        h("span", { class: `tile tile-lg t-${meta.cat}` }, meta.emoji),
+        h("h1", { class: "text-[22px] font-bold tracking-tight text-slate-100" }, L(meta.name)),
         h("span", { class: "chip" }, meta.spec)),
       h("p", { class: "text-sm text-slate-400" }, L(meta.summary))),
     ...sections,

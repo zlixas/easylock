@@ -65,8 +65,8 @@ Vectores oficiales NIST/RFC, **1.485 casos Wycheproof**, fuzzing, pruebas difere
 </table>
 
 <div align="center">
-<a href="https://zlixas.github.io/easylock/"><img src="docs/images/web-home.png" alt="easylock web" width="100%"></a>
-<sub>La página de inicio cifra y calcula el hash de lo que escribe, en vivo, con el motor en Rust compilado a WebAssembly.</sub>
+<a href="https://zlixas.github.io/easylock/"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/web-home-light.png"><img src="docs/images/web-home.png" alt="easylock web" width="100%"></picture></a>
+<sub>Una app al estilo de macOS en su navegador, en modo claro y oscuro. La página de inicio cifra y calcula el hash de lo que escribe, en vivo, con el motor en Rust compilado a WebAssembly.</sub>
 </div>
 
 > [!WARNING]
