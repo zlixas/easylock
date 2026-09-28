@@ -37,6 +37,7 @@ Bağımlılığı olmayan tek bir çekirdek var ve onu dört şekilde kullanabil
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | sh     # Linux, macOS
 # Windows: irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex
+# Homebrew: brew install zlixas/tap/easylock
 # veya kaynaktan: cargo install --git https://github.com/zlixas/easylock easylock-cli
 
 easylock --lang tr tui                     # tam ekran terminal arayüzü

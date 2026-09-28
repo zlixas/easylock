@@ -68,6 +68,9 @@ curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | s
 ```powershell
 irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex             # Windows
 ```
+```sh
+brew install zlixas/tap/easylock                                                        # Homebrew (macOS, Linux)
+```
 
 You can also download the CLI or the **desktop app** (`.dmg`, `.msi`/`.exe`, `.deb`/`.AppImage`) from
 [Releases](https://github.com/zlixas/easylock/releases). Every file is listed in the Ed25519-signed `SHA256SUMS` and has
