@@ -107,17 +107,106 @@
   .logo {
     @apply grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent-500 to-indigo-600 text-base shadow-lg shadow-accent-600/30;
   }
+  /* ---- landing page ---- */
   .hero {
-    @apply relative overflow-hidden rounded-2xl border border-obsidian-700 p-6 sm:p-10;
+    @apply relative overflow-hidden rounded-3xl border border-obsidian-700 p-6 sm:p-10 lg:p-12;
     background:
-      radial-gradient(60rem 20rem at 110% -20%, rgb(61 143 214 / .22), transparent 60%),
-      radial-gradient(40rem 20rem at -10% 120%, rgb(99 102 241 / .15), transparent 60%),
+      radial-gradient(50rem 26rem at 100% -10%, rgb(61 143 214 / .28), transparent 60%),
+      radial-gradient(40rem 24rem at -10% 110%, rgb(139 92 246 / .20), transparent 60%),
+      radial-gradient(30rem 16rem at 60% 120%, rgb(16 185 129 / .10), transparent 60%),
       var(--color-obsidian-900);
   }
-  .stat { @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 px-4 py-3; }
-  .section-title { @apply text-lg font-semibold text-slate-100; }
+  .hero-grid {
+    position: absolute; inset: 0; pointer-events: none; opacity: .35;
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / .05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / .05) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(ellipse at 70% 20%, black, transparent 70%);
+  }
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-obsidian-600 bg-obsidian-850/80 py-1 pl-1 pr-3
+           text-[11px] font-medium text-slate-300 backdrop-blur transition hover:border-accent-500;
+  }
+  .grad-text {
+    background: linear-gradient(90deg, #6bb7f0, #a78bfa 45%, #34d399);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shine 8s linear infinite;
+  }
+  @keyframes shine { to { background-position: 200% center; } }
+  .btn-lg { @apply !px-5 !py-2.5 !text-sm; }
+  .demo {
+    @apply relative space-y-3 rounded-2xl border border-obsidian-600 bg-obsidian-950/80 p-4 shadow-2xl shadow-black/50 backdrop-blur sm:p-5;
+  }
+  .demo::before {
+    content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: 1rem;
+    background: linear-gradient(135deg, rgb(61 143 214 / .6), transparent 40%, rgb(167 139 250 / .5));
+    filter: blur(14px); opacity: .45;
+  }
+  .demo-val {
+    @apply rounded-md border border-obsidian-700 bg-obsidian-900 px-2.5 py-2 font-mono text-[11px] leading-snug break-all;
+    min-height: 2.2rem; max-height: 5.2rem; overflow-y: auto;
+  }
+  .live-dot { @apply relative inline-block h-2 w-2 rounded-full bg-emerald-400; }
+  .live-dot::after {
+    content: ""; position: absolute; inset: 0; border-radius: 9999px; background: inherit;
+    animation: ping 1.6s cubic-bezier(0, 0, .2, 1) infinite;
+  }
+  @keyframes ping { 75%, 100% { transform: scale(2.4); opacity: 0; } }
+  .copy-btn {
+    @apply inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal
+           text-slate-500 transition hover:bg-obsidian-700 hover:text-slate-200;
+  }
+  .copy-btn.ok { @apply text-emerald-400; }
+  .stat {
+    @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 px-4 py-4 transition hover:border-obsidian-600;
+  }
+  .stat-n { @apply text-2xl font-extrabold tracking-tight text-slate-50 tabular-nums; }
+  .stat-l { @apply mt-0.5 text-[11px] uppercase tracking-wide text-slate-500; }
+  .section-title { @apply text-2xl font-bold tracking-tight text-slate-50; }
+  .goal-emoji { @apply grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-obsidian-800 text-xl; }
+  .term {
+    @apply flex items-center gap-1 rounded-lg border border-obsidian-700 bg-obsidian-950 px-3 py-2.5 font-mono text-[12px] text-slate-200;
+  }
+  .dl-btn {
+    @apply flex items-center gap-2.5 rounded-lg border border-obsidian-700 bg-obsidian-850 px-3 py-2.5 text-sm font-medium
+           text-slate-200 transition hover:-translate-y-0.5 hover:border-accent-500 hover:text-white;
+  }
+  .bar { @apply relative h-2.5 overflow-hidden rounded-full bg-obsidian-800; }
+  .bar-old, .bar-new { position: absolute; inset: 0 auto 0 0; border-radius: 9999px; width: 0; transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .bar-old { @apply bg-obsidian-600; z-index: 1; }
+  .bar-new { background: linear-gradient(90deg, var(--color-accent-500), #34d399); }
+  .reveal.in .bar-new, .reveal.in .bar-old { width: var(--w); }
+  .reveal.in .bar-new { transition-delay: .25s; }
+  .legend { @apply inline-block h-2 w-4 rounded-full; }
+  .elk-strip { @apply flex gap-1 overflow-x-auto pb-1; }
+  .elk-cell {
+    @apply flex min-w-[5.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-3 text-center;
+  }
+  .c-slate { @apply border-slate-500/30 bg-slate-500/10 text-slate-300; }
+  .c-amber { @apply border-amber-400/40 bg-amber-400/10 text-amber-200; }
+  .c-violet { @apply border-violet-400/40 bg-violet-400/10 text-violet-200; }
+  .c-sky { @apply border-sky-400/40 bg-sky-400/10 text-sky-200; }
+  .c-emerald { @apply border-emerald-400/30 bg-emerald-400/10 text-emerald-200; }
+  .step-n { @apply grid h-6 w-6 place-items-center rounded-full bg-accent-600/20 font-mono text-[11px] text-accent-400; }
+  .icon-tile { @apply grid h-7 w-7 place-items-center rounded-md bg-accent-600/15 text-accent-400; }
+  .card-hover { @apply transition hover:-translate-y-0.5 hover:border-obsidian-600; }
+  .faq { @apply rounded-xl border border-obsidian-700 bg-obsidian-900/70 transition open:border-obsidian-600; }
+  .faq > summary {
+    @apply flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 text-sm font-semibold text-slate-100 select-none;
+  }
+  .faq > summary::-webkit-details-marker { display: none; }
+  .faq[open] .faq-chev { transform: rotate(90deg); }
+  .faq-chev { transition: transform .2s; }
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .grad-text, .live-dot::after { animation: none; }
+  }
   .goal {
-    @apply flex items-center gap-3 rounded-xl border border-obsidian-700 bg-obsidian-900/70 p-4
+    @apply flex items-center gap-3 rounded-xl border border-obsidian-700 bg-obsidian-900/70 p-3.5
            transition hover:-translate-y-0.5 hover:border-accent-500 hover:bg-obsidian-850;
   }
 }

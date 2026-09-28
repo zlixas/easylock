@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-label="easylock — cryptography you can see, learn and trust">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d10"/>
+      <stop offset="1" stop-color="#11151d"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0.92" cy="0.05" r="0.6">
+      <stop offset="0" stop-color="#3d8fd6" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#3d8fd6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0.05" cy="1" r="0.55">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity=".32"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6bb7f0"/>
+      <stop offset=".5" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <linearGradient id="lockG" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d8fd6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity=".045"/>
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".45" stop-color="#fff" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="1"/>
+    </linearGradient>
+    <mask id="gridMask"><rect width="1280" height="400" fill="url(#fade)"/></mask>
+    <style>
+      .t { font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .m { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .hex { fill: #34d399; opacity: .0; animation: in 5s ease-in-out infinite; }
+      .hex.b { fill: #a78bfa; animation-delay: .6s; }
+      .hex.c { fill: #6bb7f0; animation-delay: 1.2s; }
+      .hex.d { fill: #34d399; animation-delay: 1.8s; }
+      @keyframes in { 0%,100% { opacity: .15 } 45%,60% { opacity: .85 } }
+      @media (prefers-reduced-motion: reduce) { .hex { animation: none; opacity: .6 } }
+    </style>
+  </defs>
+
+  <rect width="1280" height="400" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#grid)" mask="url(#gridMask)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#glowA)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#glowB)"/>
+  <rect x=".5" y=".5" width="1279" height="399" rx="24" fill="none" stroke="#2f3947"/>
+
+  <!-- logo -->
+  <g transform="translate(88 92)">
+    <rect width="76" height="76" rx="18" fill="url(#lockG)"/>
+    <path d="M26 36v-8a12 12 0 0 1 24 0v8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+    <rect x="19" y="35" width="38" height="28" rx="6" fill="#fff"/>
+    <circle cx="38" cy="47" r="4" fill="#3d8fd6"/>
+    <rect x="36" y="49" width="4" height="8" rx="2" fill="#3d8fd6"/>
+  </g>
+
+  <text x="186" y="152" class="t" font-size="68" font-weight="800" fill="url(#title)" letter-spacing="-2">easylock</text>
+  <text x="90" y="220" class="t" font-size="30" font-weight="700" fill="#f1f5f9" letter-spacing="-.5">Cryptography you can see, learn and trust.</text>
+  <text x="90" y="262" class="t" font-size="19" fill="#94a3b8">From-scratch Rust · zero dependencies · WebAssembly · post-quantum file encryption</text>
+
+  <!-- pills -->
+  <g class="t" font-size="15" font-weight="600">
+    <g transform="translate(90 300)"><rect width="104" height="34" rx="17" fill="#3d8fd6" fill-opacity=".16" stroke="#3d8fd6" stroke-opacity=".5"/><text x="52" y="22" text-anchor="middle" fill="#9ccdf5">CLI · TUI</text></g>
+    <g transform="translate(206 300)"><rect width="92" height="34" rx="17" fill="#8b5cf6" fill-opacity=".16" stroke="#8b5cf6" stroke-opacity=".5"/><text x="46" y="22" text-anchor="middle" fill="#c4b5fd">Desktop</text></g>
+    <g transform="translate(310 300)"><rect width="84" height="34" rx="17" fill="#10b981" fill-opacity=".14" stroke="#10b981" stroke-opacity=".5"/><text x="42" y="22" text-anchor="middle" fill="#6ee7b7">Web</text></g>
+    <g transform="translate(406 300)"><rect width="124" height="34" rx="17" fill="#f59e0b" fill-opacity=".12" stroke="#f59e0b" stroke-opacity=".45"/><text x="62" y="22" text-anchor="middle" fill="#fcd34d">EN · TR · ES</text></g>
+  </g>
+
+  <!-- ciphertext panel -->
+  <g transform="translate(870 70)">
+    <rect width="330" height="260" rx="16" fill="#0b0d10" fill-opacity=".85" stroke="#2f3947"/>
+    <circle cx="22" cy="22" r="5" fill="#f87171"/><circle cx="40" cy="22" r="5" fill="#fbbf24"/><circle cx="58" cy="22" r="5" fill="#34d399"/>
+    <text x="22" y="62" class="m" font-size="14" fill="#64748b">$</text>
+    <text x="38" y="62" class="m" font-size="14" fill="#e2e8f0">easylock lock taxes.pdf</text>
+    <text x="22" y="86" class="m" font-size="13" fill="#34d399">✓ taxes.pdf.elk · 0.12 s</text>
+    <text x="22" y="118" class="m" font-size="12" fill="#64748b">ELK2 · ChaCha20-Poly1305</text>
+    <g class="m" font-size="13">
+      <text x="22" y="148" class="hex">c0 3e 75 c0 79 55 fe fe ae 49 14</text>
+      <text x="22" y="170" class="hex b">3d cd 34 0f d2 9a d2 1e b3 7f 5d</text>
+      <text x="22" y="192" class="hex c">a1 c8 1e 1c 2c 9d c2 91 fa 5f a6</text>
+      <text x="22" y="214" class="hex d">9f 3a 22 86 19 0f 4c 68 a7 30 f3</text>
+    </g>
+    <text x="22" y="244" class="m" font-size="12" fill="#64748b">X25519 + ML-KEM-768 · Argon2id</text>
+  </g>
+</svg>

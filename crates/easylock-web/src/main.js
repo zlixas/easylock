@@ -6,7 +6,8 @@ import { initWasm } from "./wasm.js";
 import { mountClipboard } from "./clipboard.js";
 import { bindStatus } from "./widgets.js";
 import { TOOLS, ALIASES } from "./tools.js";
-import { META, CATEGORIES, TOOL_IDS, GOALS, ALGORITHMS } from "./content.js";
+import { META, CATEGORIES, TOOL_IDS } from "./content.js";
+import { homeView } from "./home.js";
 
 const REPO = "https://github.com/zlixas/easylock";
 const app = document.getElementById("app");
@@ -55,61 +56,6 @@ function renderSidebar() {
         h("span", { class: "flex-1 truncate text-left" }, L(META[id].name))));
     }
   }
-}
-
-/* --------------------------------------------------------------- home */
-
-function homeView() {
-  const stat = (n, key) => h("div", { class: "stat" },
-    h("div", { class: "text-2xl font-bold text-slate-100" }, String(n)),
-    h("div", { class: "text-[11px] uppercase tracking-wide text-slate-500" }, t(key)));
-
-  const eco = (ic, key, cmd) => h("div", { class: "card !p-4 space-y-2" },
-    h("div", { class: "flex items-center gap-2 text-sm font-semibold text-slate-100" },
-      icon(ic, "h-4 w-4 text-accent-400"), t(key)),
-    h("code", { class: "block whitespace-pre-wrap break-all font-mono text-[11px] text-emerald-300" }, cmd));
-
-  return h("div", { class: "mx-auto max-w-5xl space-y-10" },
-    h("section", { class: "hero" },
-      h("div", { class: "chip mb-4" }, "🔒 easylock · v" + api.version() + " · " + t("footer.license")),
-      h("h1", { class: "text-3xl font-bold tracking-tight text-slate-50 sm:text-4xl" }, t("home.title")),
-      h("p", { class: "mt-3 max-w-2xl text-[15px] leading-relaxed text-slate-400" }, t("home.lead")),
-      h("div", { class: "mt-6 flex flex-wrap gap-3" },
-        h("button", { class: "btn", onClick: () => navigate("sym.file") }, icon(ICONS.lock, "h-4 w-4"), t("home.cta.file")),
-        h("button", { class: "btn-ghost !py-2 !text-sm", onClick: () => navigate("hash.sha") }, icon(ICONS.bolt, "h-4 w-4"), t("home.cta.hash")),
-        h("a", { class: "btn-ghost !py-2 !text-sm", href: REPO, target: "_blank", rel: "noopener" }, icon(ICONS.github, "h-4 w-4"), t("home.cta.github"))),
-      h("div", { class: "mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4" },
-        stat(ALGORITHMS.length, "home.stat.algos"),
-        stat(TOOL_IDS.length, "home.stat.tools"),
-        stat(LANGS.length, "home.stat.langs"),
-        stat(0, "home.stat.server"))),
-
-    h("section", { class: "space-y-4" },
-      h("h2", { class: "section-title" }, t("home.choose")),
-      h("div", { class: "grid gap-3 sm:grid-cols-2 lg:grid-cols-3" },
-        ...GOALS.map(([key, id, emoji]) => h("button", { class: "goal", onClick: () => navigate(id) },
-          h("span", { class: "text-2xl" }, emoji),
-          h("span", { class: "flex-1 text-left" },
-            h("span", { class: "block text-sm font-semibold text-slate-100" }, t(key)),
-            h("span", { class: "block text-[11px] text-slate-500" }, L(META[id].name) + " · " + META[id].spec)),
-          icon(ICONS.chevron, "h-4 w-4 text-slate-600"))))),
-
-    h("section", { class: "space-y-4" },
-      h("h2", { class: "section-title" }, t("home.ecosystem")),
-      h("p", { class: "text-sm text-slate-400" }, t("home.ecosystem.lead")),
-      h("div", { class: "grid gap-3 sm:grid-cols-2 lg:grid-cols-4" },
-        eco(ICONS.terminal, "home.eco.cli", "easylock lock taxes.pdf\neasylock hash --algo blake3 < iso"),
-        eco(ICONS.keyboard, "home.eco.tui", "easylock tui"),
-        eco(ICONS.desktop, "home.eco.desktop", "cargo tauri build"),
-        eco(ICONS.globe, "home.eco.web", "WebAssembly · offline-capable"))),
-
-    h("section", { class: "space-y-3" },
-      h("h2", { class: "section-title" }, t("home.algos")),
-      h("div", { class: "flex flex-wrap gap-2" }, ...ALGORITHMS.map((a) => h("span", { class: "chip" }, a)))),
-
-    h("section", { class: "rounded-xl border border-amber-500/30 bg-amber-500/5 p-5" },
-      h("div", { class: "mb-1 text-sm font-bold text-amber-300" }, "⚠ " + t("home.warn.title")),
-      h("p", { class: "text-[13px] leading-relaxed text-slate-300" }, t("home.warn.body"))));
 }
 
 /* ----------------------------------------------------- command palette */
@@ -192,7 +138,7 @@ document.addEventListener("keydown", (e) => {
 function renderWorkspace() {
   clear(workspaceEl);
   try {
-    workspaceEl.append(current === "home" ? homeView() : TOOLS[current]());
+    workspaceEl.append(current === "home" ? homeView(navigate) : TOOLS[current]());
   } catch (e) {
     workspaceEl.append(h("pre", { class: "text-xs text-red-400" }, String(e.stack || e)));
   }
@@ -232,7 +178,7 @@ function layout() {
         icon(ICONS.keyboard, "h-4 w-4"), t("kbd.title"))));
 
   mainEl = h("main", { class: "flex-1 overflow-y-auto p-4 pb-40 sm:p-6 sm:pb-40" }, workspaceEl,
-    h("footer", { class: "mx-auto mt-16 flex max-w-5xl flex-wrap items-center justify-between gap-3 border-t border-obsidian-800 pt-5 text-[11px] text-slate-600" },
+    h("footer", { class: "mx-auto mt-16 flex max-w-6xl flex-wrap items-center justify-between gap-3 border-t border-obsidian-800 pt-5 text-[11px] text-slate-600" },
       h("span", {}, "easylock · " + t("footer.built")),
       h("span", { class: "flex gap-4" },
         h("a", { class: "hover:text-slate-300", href: REPO, target: "_blank", rel: "noopener" }, "GitHub"),
