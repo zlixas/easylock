@@ -9,6 +9,13 @@ All notable changes to this project are documented here. The format follows
 - Website: installable **PWA** that works fully **offline** (service worker), a strict **Content-Security-Policy**
   (no inline scripts, no third-party requests), and a **Web Worker** that runs Argon2, file encryption and RSA
   key generation off the main thread so the page never freezes.
+- Website: a new landing page with a live encrypt-and-hash demo, OS-aware install and desktop downloads,
+  animated performance comparison, an `.elk` format diagram, a trust section and an FAQ, all in EN/TR/ES.
+  Social preview image and Open Graph tags.
+- README (EN/TR/ES): banner, feature grid, per-platform install table with direct downloads, screenshots, FAQ and roadmap.
+
+### Changed
+- Website: the clipboard dock starts folded and opens on the first result, so it never covers the page.
 
 ## [0.2.0] - 2026-09-28
 

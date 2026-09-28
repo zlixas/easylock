@@ -1,45 +1,104 @@
 <div align="center">
 
-# 🔒 easylock
+<a href="https://zlixas.github.io/easylock/"><img src="docs/images/banner.svg" alt="easylock: cryptography you can see, learn and trust" width="100%"></a>
 
-**Cryptography written from scratch in Rust, which you can see, learn from and experiment with.**
+<p>
+  <a href="https://github.com/zlixas/easylock/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/zlixas/easylock?style=flat-square&color=3d8fd6&label=release"></a>
+  <a href="https://github.com/zlixas/easylock/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zlixas/easylock/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="https://zlixas.github.io/easylock/"><img alt="Website" src="https://img.shields.io/github/actions/workflow/status/zlixas/easylock/pages.yml?branch=main&style=flat-square&label=website"></a>
+  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-8a2be2?style=flat-square"></a>
+  <a href="rust-toolchain.toml"><img alt="Rust 1.98+" src="https://img.shields.io/badge/rust-1.98%2B-orange?style=flat-square&logo=rust"></a>
+  <img alt="Zero dependencies" src="https://img.shields.io/badge/core%20deps-0-success?style=flat-square">
+  <img alt="Wycheproof" src="https://img.shields.io/badge/Wycheproof-1%2C485%20vectors-success?style=flat-square">
+</p>
 
-One dependency-free core, four ways to use it: a **command line**, a **terminal UI**,
-a **desktop app** and a **website that runs entirely in your browser**.
-
-[![CI](https://github.com/zlixas/easylock/actions/workflows/ci.yml/badge.svg)](https://github.com/zlixas/easylock/actions/workflows/ci.yml)
-[![Pages](https://github.com/zlixas/easylock/actions/workflows/pages.yml/badge.svg)](https://zlixas.github.io/easylock/)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
-[![Rust 1.98+](https://img.shields.io/badge/rust-1.98%2B-orange.svg)](rust-toolchain.toml)
-![clippy::pedantic](https://img.shields.io/badge/clippy-pedantic%20clean-success)
-![languages](https://img.shields.io/badge/i18n-EN%20·%20TR%20·%20ES-8a2be2)
-
-**[🌐 Try it in your browser →](https://zlixas.github.io/easylock/)**
+<h3>
+  <a href="https://zlixas.github.io/easylock/">🌐 Open the web app</a>
+  &nbsp;·&nbsp;
+  <a href="#-install">⬇️ Install</a>
+  &nbsp;·&nbsp;
+  <a href="docs/FILE_FORMAT.md">📄 File format</a>
+  &nbsp;·&nbsp;
+  <a href="docs/ARCHITECTURE.md">🧭 Architecture</a>
+</h3>
 
 English · [Türkçe](README.tr.md) · [Español](README.es.md)
 
-<img src="docs/images/web-home.png" alt="The easylock web app" width="860">
+</div>
 
+<br>
+
+**easylock** is a cryptography toolkit written **from scratch in Rust**, with every primitive from AES to post-quantum ML-KEM
+implemented from first principles and **zero dependencies**. The same engine powers a **command line**, a **terminal UI**,
+a **desktop app** and a **website that runs entirely in your browser**, and all four share one encrypted file format.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 📦 Encrypt anything
+Files and whole folders, to a password, to other people's **public keys**, or both. Streams at multi-GB/s in constant memory.
+
+</td>
+<td width="33%" valign="top">
+
+### 🛰️ Post-quantum sharing
+Recipients use a hybrid **X25519 + ML-KEM-768** key, so recorded files stay safe even against a future quantum computer.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔐 Encrypted vaults
+A folder where files **stay encrypted**. Names and sizes are hidden too, and it syncs safely through iCloud, Dropbox or Git.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🎓 Learn by doing
+20 interactive tools with a **Learn** panel each (*what · how · when · pitfalls*) in English, Turkish and Spanish.
+
+</td>
+<td valign="top">
+
+### ⚡ Seriously fast
+Hand-written AES-NI / ARMv8, PCLMUL / PMULL, SHA-NI, NEON and SSE2 paths: **4.3 GB/s** AES-GCM, **2.4 GB/s** SHA-256.
+
+</td>
+<td valign="top">
+
+### 🧪 Built to be checked
+Official NIST/RFC vectors, **1,485 Wycheproof** edge cases, fuzzing, differential tests and signed, attested releases.
+
+</td>
+</tr>
+</table>
+
+<div align="center">
+<a href="https://zlixas.github.io/easylock/"><img src="docs/images/web-home.png" alt="The easylock web app: a live encryption demo on the home page" width="100%"></a>
+<sub>The home page encrypts and hashes what you type, live, using the Rust engine compiled to WebAssembly.</sub>
 </div>
 
 > [!WARNING]
 > **Educational and unaudited.** Every primitive is implemented from first principles and
-> checked against official test vectors (NIST CAVP, FIPS 197/180-4/202/203, RFC 7748/8032/8439/9106 …).
+> checked against official test vectors (NIST CAVP, FIPS 197/180-4/202/203, RFC 7748/8032/8439/9106 …) and Project Wycheproof.
 > That is necessary, but it is **not enough** to make the code safe for production. Nobody has
-> independently audited it. To protect real secrets, use a reviewed library such as
-> `ring`, RustCrypto, libsodium or aws-lc. See [SECURITY.md](SECURITY.md).
+> independently audited it. To protect real secrets, use a reviewed tool such as
+> `age`, `ring`, RustCrypto, libsodium or aws-lc. See [SECURITY.md](SECURITY.md).
 
 ---
 
 ## Contents
 
 - [Why easylock?](#why-easylock)
+- [Install](#install)
 - [Quick start](#quick-start)
 - [What's inside](#whats-inside)
 - [The four front-ends](#the-four-front-ends)
-- [Architecture](#architecture)
-- [Building & testing](#building--testing)
-- [Documentation](#documentation)
+- [Performance](#performance) · [Quality & assurance](#quality--assurance)
+- [Architecture](#architecture) · [Building & testing](#building--testing)
+- [FAQ](#faq) · [Roadmap](#roadmap)
 - [Contributing](#contributing) · [Citing](#citing) · [License](#license)
 
 ## Why easylock?
@@ -56,31 +115,31 @@ Most people use cryptography as a black box. easylock opens the box:
   opens on the website, and a file you lock on the website opens in the terminal.
 - **Private.** The website compiles the same Rust core to WebAssembly, so it never sends a byte to a server.
 
+## Install
+
+| Platform | Command line + terminal UI | Desktop app |
+|---|---|---|
+| **macOS** | `brew install zlixas/tap/easylock` | [Apple Silicon `.dmg`](https://github.com/zlixas/easylock/releases/latest/download/easylock-desktop-macos-arm64.dmg) · [Intel `.dmg`](https://github.com/zlixas/easylock/releases/latest/download/easylock-desktop-macos-x64.dmg) |
+| **Linux** | `curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh \| sh` | [`.AppImage`](https://github.com/zlixas/easylock/releases/latest/download/easylock-desktop-linux-x64.AppImage) · [`.deb`](https://github.com/zlixas/easylock/releases/latest/download/easylock-desktop-linux-x64.deb) |
+| **Windows** | `irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 \| iex` | [Installer `.exe`](https://github.com/zlixas/easylock/releases/latest/download/easylock-desktop-windows-x64.exe) · [`.msi`](https://github.com/zlixas/easylock/releases/latest/download/easylock-desktop-windows-x64.msi) |
+| **Browser** | nothing to install: **<https://zlixas.github.io/easylock/>** (works offline as a PWA) | |
+| **Source** | `cargo install --git https://github.com/zlixas/easylock easylock-cli` | `cd crates/easylock-gui && cargo tauri build` |
+
+The install scripts check the download against the release's `SHA256SUMS`, and the Homebrew formula pins its hashes.
+Every release file is listed in the Ed25519-signed `SHA256SUMS` and has GitHub build provenance:
+
+```sh
+easylock verify --public "$(cat RELEASE_SIGNING_KEY.txt)" -S "$(cat SHA256SUMS.sig)" SHA256SUMS
+gh attestation verify easylock-aarch64-apple-darwin.tar.gz --repo zlixas/easylock
+```
+
+> [!NOTE]
+> The desktop apps are not code-signed by Apple or Microsoft yet. On macOS right-click → **Open** the first time;
+> on Windows choose **More info → Run anyway**.
+
 ## Quick start
 
-**In the browser, with nothing to install:** <https://zlixas.github.io/easylock/>
-
-**Install a prebuilt release** (checksum-verified):
-
 ```sh
-curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | sh        # Linux, macOS
-```
-```powershell
-irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex             # Windows
-```
-```sh
-brew install zlixas/tap/easylock                                                        # Homebrew (macOS, Linux)
-```
-
-You can also download the CLI or the **desktop app** (`.dmg`, `.msi`/`.exe`, `.deb`/`.AppImage`) from
-[Releases](https://github.com/zlixas/easylock/releases). Every file is listed in the Ed25519-signed `SHA256SUMS` and has
-GitHub build provenance.
-
-**From source** (Rust 1.98+):
-
-```sh
-cargo install --git https://github.com/zlixas/easylock easylock-cli   # installs `easylock`
-
 easylock tui                               # full-screen interactive UI
 easylock lock taxes.pdf                    # → taxes.pdf.elk  (asks for a password)
 easylock unlock taxes.pdf.elk              # → taxes.pdf
@@ -117,7 +176,16 @@ selection, runtime CPU feature dispatch, a C ABI ([`easylock.h`](crates/easylock
 
 ### 🌐 Website (WebAssembly)
 
-<img src="docs/images/web-x25519.png" alt="X25519 key exchange demo" width="720">
+<table>
+<tr>
+<td width="50%"><img src="docs/images/web-file.png" alt="Encrypt a file with a password or public keys"></td>
+<td width="50%"><img src="docs/images/web-x25519.png" alt="X25519 key exchange walkthrough"></td>
+</tr>
+<tr>
+<td align="center"><sub>Encrypt a file to a password, public keys, or both</sub></td>
+<td align="center"><sub>X25519 key exchange, step by step</sub></td>
+</tr>
+</table>
 
 The website has 20 tools in five categories. Each one includes a *Learn* panel and runs entirely on your device.
 
@@ -294,7 +362,7 @@ npm run wasm     # wasm-pack build of easylock-wasm
 npm run dev      # http://localhost:5173
 ```
 
-Supported native targets are `aarch64`/`x86_64` on macOS and Linux. CI runs fmt, clippy and tests on both Ubuntu and macOS.
+Release builds cover `x86_64`/`aarch64` Linux, Apple Silicon and Intel macOS, and `x86_64` Windows. CI runs fmt, clippy (pedantic) and the test suite on Ubuntu, macOS and Windows, plus WebAssembly, cargo-deny, fuzzing and coverage jobs.
 
 ## Documentation
 
@@ -305,6 +373,55 @@ Supported native targets are `aarch64`/`x86_64` on macOS and Linux. CI runs fmt,
 | [SECURITY.md](SECURITY.md) | Threat model, known limitations, how to report issues |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Dev setup, coding standards, adding a primitive or a language |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
+
+## FAQ
+
+<details>
+<summary><b>Are my files uploaded anywhere when I use the website?</b></summary>
+
+No. The Rust engine runs inside your browser as WebAssembly. The Content-Security-Policy only allows the site's own files,
+no third-party code is loaded, and once visited the site works in airplane mode.
+</details>
+
+<details>
+<summary><b>Can a file locked on the website be opened in the terminal (and vice versa)?</b></summary>
+
+Yes. The website, CLI, terminal UI and desktop app all read and write the same `.elk` format, byte for byte.
+</details>
+
+<details>
+<summary><b>What does "post-quantum" mean for public-key files?</b></summary>
+
+Each recipient slot combines X25519 with ML-KEM-768 (FIPS 203) and derives the wrapping key from both shared secrets.
+An attacker must break both, so a future quantum computer that breaks X25519 alone does not open the file.
+</details>
+
+<details>
+<summary><b>How is this different from age or GPG?</b></summary>
+
+`age` and GPG are mature, reviewed tools, and you should prefer them for real secrets. easylock exists to be **read and
+learned from**: every primitive underneath is in this repository, readable, tested and explained, and the whole thing also
+runs in a browser.
+</details>
+
+<details>
+<summary><b>What happens if I forget my password?</b></summary>
+
+The file cannot be recovered. That is the point. For important files, add your public key as a second way in:
+`easylock lock file -r "$(easylock identity --show)" --with-password`.
+</details>
+
+## Roadmap
+
+- [x] Streaming, multi-core `.elk` v2 with password and hybrid post-quantum recipients
+- [x] Encrypted vaults · signed, attested releases for Linux, macOS and Windows · Homebrew
+- [x] Offline PWA with strict CSP and Web Worker crypto
+- [ ] Vault browser in the terminal UI and the desktop app
+- [ ] BLAKE3 SIMD, faster field arithmetic for Curve25519
+- [ ] Code-signed desktop builds
+- [ ] An independent security review
+
+Ideas and pull requests are welcome, see [Contributing](#contributing).
 
 ## Contributing
 
@@ -324,3 +441,8 @@ easylock is dual-licensed under either of
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
+
+<div align="center">
+<br>
+<sub>Made with 🦀 and a lot of test vectors · <a href="https://zlixas.github.io/easylock/">zlixas.github.io/easylock</a></sub>
+</div>
