@@ -29,6 +29,8 @@ jobs:
             exclude: --exclude easylock-gui
           - os: macos-latest
             exclude: ""
+          - os: windows-latest
+            exclude: --exclude easylock-gui
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install toolchain (from rust-toolchain.toml)

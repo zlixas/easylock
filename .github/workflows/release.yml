@@ -1,0 +1,178 @@
+name: Release
+
+# Push a tag like `v0.2.0` to build and publish a release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cli:
+    name: CLI · ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: rustup target add ${{ matrix.target }}
+      - name: build
+        run: cargo build --release --locked -p easylock-cli --target ${{ matrix.target }}
+      - name: package
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          name="easylock-$TARGET"
+          mkdir -p "dist/$name"
+          cp README.md LICENSE-MIT LICENSE-APACHE CHANGELOG.md "dist/$name/"
+          if [[ "$TARGET" == *windows* ]]; then
+            cp "target/$TARGET/release/easylock.exe" "dist/$name/"
+            (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
+          else
+            cp "target/$TARGET/release/easylock" "dist/$name/"
+            tar -C dist -czf "dist/$name.tar.gz" "$name"
+          fi
+          rm -rf "dist/$name"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: dist/*
+
+  desktop:
+    name: Desktop · ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, name: macos-arm64, target: aarch64-apple-darwin }
+          - { os: macos-latest, name: macos-x64, target: x86_64-apple-darwin }
+          - { os: windows-latest, name: windows-x64, target: x86_64-pc-windows-msvc }
+          - { os: ubuntu-22.04, name: linux-x64, target: x86_64-unknown-linux-gnu }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: rustup target add ${{ matrix.target }}
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+      - name: build app bundles
+        working-directory: crates/easylock-gui
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # .app only; the DMG is made with hdiutil below (no Finder scripting needed)
+            npx --yes @tauri-apps/cli@2 build --target "$TARGET" --bundles app
+          else
+            npx --yes @tauri-apps/cli@2 build --target "$TARGET"
+          fi
+      - name: collect bundles
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          b="target/$TARGET/release/bundle"
+          shopt -s nullglob
+          if [ -d "$b/macos/easylock.app" ]; then
+            root="$(mktemp -d)"
+            cp -R "$b/macos/easylock.app" "$root/"
+            ln -s /Applications "$root/Applications"
+            hdiutil create -volname easylock -srcfolder "$root" -ov -format UDZO "dist/easylock-desktop-$NAME.dmg"
+          fi
+          for f in "$b"/msi/*.msi "$b"/nsis/*.exe "$b"/deb/*.deb "$b"/appimage/*.AppImage; do
+            ext="${f##*.}"
+            cp "$f" "dist/easylock-desktop-$NAME.$ext"
+          done
+          ls -l dist
+          test -n "$(ls dist)"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: dist/*
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: dist/*
+
+  publish:
+    name: Publish release
+    needs: [cli, desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: checksums and signature
+        env:
+          SEED: ${{ secrets.EASYLOCK_RELEASE_SIGNING_SEED }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+          cargo build --release --locked -p easylock-cli --manifest-path ../Cargo.toml
+          ../target/release/easylock sign --seed "$SEED" SHA256SUMS > SHA256SUMS.sig
+          # self-check against the key published in the repository
+          ../target/release/easylock verify --public "$(cat ../RELEASE_SIGNING_KEY.txt)" \
+            --signature "$(cat SHA256SUMS.sig)" SHA256SUMS
+      - name: release notes from CHANGELOG
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ver="${TAG#v}"
+          awk -v v="$ver" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' CHANGELOG.md > notes.md
+          cat >> notes.md <<'EOF'
+
+          ---
+          **Install:** `curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | sh`
+          (Windows: `irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex`)
+
+          **Verify:** every file is listed in `SHA256SUMS`, which is signed with the Ed25519 key in
+          [`RELEASE_SIGNING_KEY.txt`](https://github.com/zlixas/easylock/blob/main/RELEASE_SIGNING_KEY.txt):
+          `easylock verify --public $(cat RELEASE_SIGNING_KEY.txt) -S $(cat SHA256SUMS.sig) SHA256SUMS`.
+          Build provenance: `gh attestation verify <file> --repo zlixas/easylock`.
+
+          Desktop apps are not code-signed by Apple/Microsoft: on macOS right-click → Open the first time;
+          on Windows choose "More info → Run anyway".
+          EOF
+      - name: create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" artifacts/* --title "easylock $TAG" --notes-file notes.md --verify-tag

@@ -75,7 +75,11 @@ fn main() -> ExitCode {
     // Resolve the language before clap runs so `--help` is localized too.
     let lang = i18n::prescan_lang(&args);
 
-    let matches = help::localized_command(Cli::command(), lang).get_matches_from(args);
+    // With -h/--help, skip validation so commands with required arguments still show help.
+    let asks_help = args.iter().skip(1).any(|a| a == "-h" || a == "--help");
+    let matches = help::localized_command(Cli::command(), lang)
+        .ignore_errors(asks_help)
+        .get_matches_from(args);
 
     if help::wants_version(&matches) {
         println!("easylock {}", env!("CARGO_PKG_VERSION"));
