@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
 ### Security
 - **Ed25519 signature forgery with small-order public keys (high).** `verify` accepted the forged signature
   `R = B, S = 1` for *any* message under the identity public key `01 00…00` (and the other small-order points), and this was

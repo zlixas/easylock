@@ -35,7 +35,9 @@ Un núcleo sin dependencias y cuatro formas de usarlo: **línea de comandos**, *
 ## Inicio rápido
 
 ```sh
-cargo install --git https://github.com/zlixas/easylock easylock-cli
+curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | sh     # Linux, macOS
+# Windows: irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex
+# o desde el código: cargo install --git https://github.com/zlixas/easylock easylock-cli
 
 easylock --lang es tui                     # interfaz de terminal a pantalla completa
 easylock lock impuestos.pdf                # → impuestos.pdf.elk (pide una contraseña)

@@ -35,7 +35,9 @@ Bağımlılığı olmayan tek bir çekirdek var ve onu dört şekilde kullanabil
 ## Hızlı başlangıç
 
 ```sh
-cargo install --git https://github.com/zlixas/easylock easylock-cli
+curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | sh     # Linux, macOS
+# Windows: irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex
+# veya kaynaktan: cargo install --git https://github.com/zlixas/easylock easylock-cli
 
 easylock --lang tr tui                     # tam ekran terminal arayüzü
 easylock lock vergiler.pdf                 # → vergiler.pdf.elk (parola sorar)

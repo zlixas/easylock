@@ -60,7 +60,20 @@ Most people use cryptography as a black box. easylock opens the box:
 
 **In the browser, with nothing to install:** <https://zlixas.github.io/easylock/>
 
-**On the command line** (macOS / Linux, Rust 1.98+):
+**Install a prebuilt release** (checksum-verified):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zlixas/easylock/main/install.sh | sh        # Linux, macOS
+```
+```powershell
+irm https://raw.githubusercontent.com/zlixas/easylock/main/install.ps1 | iex             # Windows
+```
+
+You can also download the CLI or the **desktop app** (`.dmg`, `.msi`/`.exe`, `.deb`/`.AppImage`) from
+[Releases](https://github.com/zlixas/easylock/releases). Every file is listed in the Ed25519-signed `SHA256SUMS` and has
+GitHub build provenance.
+
+**From source** (Rust 1.98+):
 
 ```sh
 cargo install --git https://github.com/zlixas/easylock easylock-cli   # installs `easylock`
