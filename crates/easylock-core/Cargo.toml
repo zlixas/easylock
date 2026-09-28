@@ -23,7 +23,7 @@ force-portable = []
 # Intentionally empty: easylock-core has no runtime dependencies.
 
 [dev-dependencies]
-criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 serde_json = "1"
 
 [lints]
