@@ -169,11 +169,11 @@ function fileTool() {
       const usePw = protect !== "keys";
       if (usePw && !pw.input.value) throw new Error(t("msg.pwEmpty"));
       if (usePw && pw.input.value !== pw2.input.value) throw new Error(t("msg.pwDiffer"));
-      out = api.elkSeal(data, usePw ? pw.input.value : "", protect === "password" ? "" : recips.value, cipher.value);
+      out = await api.elkSeal(data, usePw ? pw.input.value : "", protect === "password" ? "" : recips.value, cipher.value);
       name = fileName + ".elk";
     } else {
       if (info && info.folder) throw new Error(t("msg.folder"));
-      out = api.elkOpen(data, pw.input.value, secret.value);
+      out = await api.elkOpen(data, pw.input.value, secret.value);
       name = fileName.endsWith(".elk") ? fileName.slice(0, -4) : fileName + ".dec";
     }
     const dl = h("button", { class: "btn", type: "button", onClick: () => download(out, name) },
@@ -246,8 +246,8 @@ function textTool() {
 
   go.onclick = busy(go, async () => {
     if (!pw.input.value) throw new Error(t("msg.pwEmpty"));
-    if (mode === "encrypt") out.set(api.elkSealToken(msg.value, pw.input.value, cipher.value));
-    else out.set(api.elkOpenToken(msg.value, pw.input.value), { capture: false });
+    if (mode === "encrypt") out.set(await api.elkSealToken(msg.value, pw.input.value, cipher.value));
+    else out.set(await api.elkOpenToken(msg.value, pw.input.value), { capture: false });
     status(`${t("msg.done")} ✓`, "ok");
   }, t("msg.deriving"));
 
@@ -407,7 +407,7 @@ function rsaTool() {
   const genBtn = button("btn.generate", null, ICONS.key);
   genBtn.onclick = busy(genBtn, async () => {
     const t0 = performance.now();
-    const k = api.keygen("rsa2048");
+    const k = await api.keygenAsync("rsa2048");
     const ms = Math.round(performance.now() - t0);
     pushClip("key", "RSA-2048 secret", k.secret);
     res.replaceChildren(
@@ -532,10 +532,10 @@ function argon2Tool() {
     if (!pw.input.value) throw new Error(t("msg.pwEmpty"));
     const t0 = performance.now();
     if (mode === "hash") {
-      out.set(api.argon2Phc(pw.input.value, hexToBytes(salt.get()), +m.value, +tt.value, +p.value));
+      out.set(await api.argon2Phc(pw.input.value, hexToBytes(salt.get()), +m.value, +tt.value, +p.value));
       result.replaceChildren();
     } else {
-      const ok = api.argon2Verify(pw.input.value, phc.value);
+      const ok = await api.argon2Verify(pw.input.value, phc.value);
       result.replaceChildren(badge(ok, ok ? t("msg.pwMatch") : t("msg.pwNoMatch")));
     }
     status(`${t("msg.done")} ✓ · ${Math.round(performance.now() - t0)} ms`, "ok");
@@ -555,7 +555,7 @@ function pbkdf2Tool() {
   salt.set(bytesToHex(api.random(16)));
   go.onclick = busy(go, async () => {
     const t0 = performance.now();
-    out.set(api.pbkdf2(pw.input.value, hexToBytes(salt.get()), +iters.value, +len.value));
+    out.set(await api.pbkdf2(pw.input.value, hexToBytes(salt.get()), +iters.value, +len.value));
     status(`${t("msg.done")} ✓ · ${Math.round(performance.now() - t0)} ms`, "ok");
   });
   return toolView("hash.pbkdf2",

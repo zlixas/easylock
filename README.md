@@ -132,6 +132,8 @@ The website has 20 tools in five categories. Each one includes a *Learn* panel a
 The site also has a command palette (<kbd>⌘/Ctrl</kbd>+<kbd>K</kbd> or <kbd>/</kbd>), keyboard shortcuts (<kbd>?</kbd>), a layout
 that works on phones, an EN/TR/ES switch (<kbd>Alt</kbd>+<kbd>L</kbd>) and a floating clipboard that holds up to five recent results.
 The clipboard is wiped when you close the tab or after 5 minutes idle.
+The site is an installable **PWA** that works **offline**. It runs under a strict Content-Security-Policy with no third-party requests,
+and the slow operations (Argon2, file encryption) run in a Web Worker so the page stays responsive.
 
 ### 🗄️ File encryption in depth
 

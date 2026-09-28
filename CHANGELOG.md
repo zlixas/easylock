@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Website: installable **PWA** that works fully **offline** (service worker), a strict **Content-Security-Policy**
+  (no inline scripts, no third-party requests), and a **Web Worker** that runs Argon2, file encryption and RSA
+  key generation off the main thread so the page never freezes.
+
 ## [0.2.0] - 2026-09-28
 
 ### Security

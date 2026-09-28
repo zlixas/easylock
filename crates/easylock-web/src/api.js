@@ -39,6 +39,36 @@ export function bytesToB64url(b) {
 /** Let the browser paint (status text, spinners) before a slow wasm call. */
 export const yieldUI = () => new Promise((r) => setTimeout(r, 30));
 
+// --- worker bridge ------------------------------------------------------
+
+let worker = null;
+let seq = 0;
+const pending = new Map();
+
+/** Run `fn` in the crypto worker; resolves with its result. */
+function inWorker(fn, ...args) {
+  if (!worker) {
+    worker = new Worker(new URL("./crypto.worker.js", import.meta.url), { type: "module" });
+    worker.onmessage = ({ data }) => {
+      const p = pending.get(data.id);
+      pending.delete(data.id);
+      if (!p) return;
+      if (data.ok) p.resolve(data.result);
+      else p.reject(new Error(data.error));
+    };
+    worker.onerror = (e) => {
+      for (const p of pending.values()) p.reject(new Error(e.message || "crypto worker failed"));
+      pending.clear();
+      worker = null;
+    };
+  }
+  return new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ id, fn, args });
+  });
+}
+
 // --- API --------------------------------------------------------------
 
 export const api = {
@@ -53,10 +83,11 @@ export const api = {
   aeadSeal: (alg, key, nonce, aad, pt) => wasm.aead_seal(alg, key, nonce, aad, pt),
   aeadOpen: (alg, key, nonce, aad, ct) => wasm.aead_open(alg, key, nonce, aad, ct),
 
-  argon2Phc: (password, salt, m, t, p) => wasm.argon2id_phc(enc.encode(password), salt, m, t, p),
-  argon2Verify: (password, phc) => wasm.argon2_verify(enc.encode(password), phc.trim()),
-  pbkdf2: (password, salt, iterations, outLen) =>
-    bytesToHex(wasm.pbkdf2_sha256(enc.encode(password), salt, iterations, outLen)),
+  // Slow / memory-hard operations run in the worker and return promises.
+  argon2Phc: (password, salt, m, t, p) => inWorker("argon2Phc", password, salt, m, t, p),
+  argon2Verify: (password, phc) => inWorker("argon2Verify", password, phc),
+  pbkdf2: async (password, salt, iterations, outLen) =>
+    bytesToHex(await inWorker("pbkdf2", password, salt, iterations, outLen)),
 
   encode: (input, steps, decode) => wasm.encode_pipeline(input, steps, decode),
 
@@ -67,6 +98,7 @@ export const api = {
   },
 
   keygen: (kind) => wasm.keygen(kind),
+  keygenAsync: (kind) => inWorker("keygen", kind),
   mlkemEncaps: (param, ekHex) => wasm.mlkem_encaps(param, ekHex),
   mlkemDecaps: (param, dkHex, ctHex) => wasm.mlkem_decaps(param, dkHex, ctHex),
 
@@ -75,13 +107,15 @@ export const api = {
   edSign: (seedHex, msg) => wasm.ed25519_sign(seedHex, msg),
   edVerify: (publicHex, msg, sigHex) => wasm.ed25519_verify(publicHex, msg, sigHex),
 
-  elkSeal: (data, pw, recipients, cipher) => wasm.elk_seal(data, enc.encode(pw), recipients, cipher, false),
-  elkOpen: (data, pw, identity) => wasm.elk_open(data, enc.encode(pw), identity),
+  elkSeal: (data, pw, recipients, cipher) => inWorker("elkSeal", data, pw, recipients, cipher),
+  elkOpen: (data, pw, identity) => inWorker("elkOpen", data, pw, identity),
   elkInfo: (data) => wasm.elk_info(data),
   identityGenerate: () => wasm.identity_generate(),
   identityPublic: (secret) => wasm.identity_public(secret.trim()),
-  elkSealToken: (text, pw, cipher) => wasm.elk_seal_token(text, enc.encode(pw), cipher),
-  elkOpenToken: (token, pw) => wasm.elk_open_token(token.trim(), enc.encode(pw)),
+  elkSealToken: (text, pw, cipher) => inWorker("elkSealToken", text, pw, cipher),
+  elkOpenToken: (token, pw) => inWorker("elkOpenToken", token, pw),
 
   random: (n) => wasm.random_bytes(n),
+  /** Start the worker early (also caches it for offline use). */
+  warmWorker: () => inWorker("ping").catch(() => {}),
 };

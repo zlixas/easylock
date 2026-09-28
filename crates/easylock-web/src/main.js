@@ -269,11 +269,22 @@ window.addEventListener("popstate", () => {
 
 document.documentElement.lang = getLang();
 
+// Offline support: cache the app once so every tool works without a network.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+
 // Boot: show a loading state, initialise WASM, then render the app.
 app.append(h("div", { class: "flex h-screen flex-col items-center justify-center gap-3 font-mono text-sm text-slate-500" },
   h("span", { class: "logo animate-pulse" }, "🔒"), t("msg.engineLoading")));
 initWasm()
-  .then(renderAll)
+  .then(() => {
+    renderAll();
+    // Load the crypto worker in idle time so the first slow operation starts instantly.
+    (window.requestIdleCallback || ((f) => setTimeout(f, 500)))(() => api.warmWorker());
+  })
   .catch((e) => {
     clear(app);
     app.append(h("div", { class: "m-10 rounded-lg border border-red-500/40 bg-red-500/10 p-6 text-sm text-red-300" },
