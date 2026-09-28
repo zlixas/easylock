@@ -305,6 +305,8 @@ no dependencies. The hardware paths use each CPU's own instructions, selected at
 
 Every fast path is checked against the portable implementation in a differential test, on ARM natively and on x86-64 under Rosetta and in CI.
 
+<img src="docs/images/web-perf.png" alt="Performance and .elk format sections of the website" width="100%">
+
 ## Quality & assurance
 
 | Check | Where |
