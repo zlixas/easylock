@@ -1,10 +1,13 @@
 //! `easylock hash`
 
 use crate::i18n::{CliError, Lang, Msg};
-use crate::io::{read_input, write_output};
+use crate::io::write_output;
 use crate::FileArgs;
 use easylock_core::encode::{base64, hex};
 use easylock_core::hash::Algorithm;
+use std::fs::File;
+use std::io::Read;
+use std::path::PathBuf;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct Args {
@@ -20,12 +23,31 @@ pub struct Args {
     pub files: FileArgs,
 }
 
+/// Hash a file (or stdin) in constant memory, 1 MiB at a time.
+fn hash_stream(alg: Algorithm, input: &Option<PathBuf>) -> Result<Vec<u8>, CliError> {
+    let mut reader: Box<dyn Read> = match input {
+        Some(p) if p.as_os_str() != "-" => {
+            Box::new(File::open(p).map_err(|e| CliError::new(Msg::ReadError(e.to_string())))?)
+        }
+        _ => Box::new(std::io::stdin().lock()),
+    };
+    let mut h = alg.hasher();
+    let mut buf = vec![0u8; 1 << 20];
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => return Ok(h.finalize()),
+            Ok(n) => h.update(&buf[..n]),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(CliError::new(Msg::ReadError(e.to_string()))),
+        }
+    }
+}
+
 pub fn run(args: &Args, lang: Lang) -> Result<(), CliError> {
     let alg = Algorithm::parse(&args.algo)
         .ok_or_else(|| CliError::new(Msg::UnknownAlgorithm(args.algo.clone())))?;
 
-    let data = read_input(&args.files.input)?;
-    let digest = alg.hash(&data);
+    let digest = hash_stream(alg, &args.files.input)?;
 
     let rendered = match args.encoding.as_str() {
         "raw" => digest.clone(),

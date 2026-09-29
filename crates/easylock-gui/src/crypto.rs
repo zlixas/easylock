@@ -32,18 +32,28 @@ pub fn hash_bytes(data: &[u8], algo: &str) -> Result<String, String> {
     Ok(hex::encode(&parse_algo(algo)?.hash(data)))
 }
 
+/// Buffer size for streaming file work (hashing, encryption input).
+const IO_BUF: usize = 1 << 20;
+
+/// Hash a file in constant memory, 1 MiB at a time.
 pub fn hash_file_path(path: &str, algo: &str) -> Result<(String, u64), String> {
-    let alg = parse_algo(algo)?;
+    let mut h = parse_algo(algo)?.hasher();
     let mut f = File::open(path).map_err(|e| format!("open {path}: {e}"))?;
-    // Streaming would need a Digest object per algo; files here are modest, read
-    // fully but report the size.
-    let mut data = Vec::new();
-    let n = f
-        .read_to_end(&mut data)
-        .map_err(|e| format!("read {path}: {e}"))? as u64;
-    let digest = hex::encode(&alg.hash(&data));
-    data.zeroize();
-    Ok((digest, n))
+    let mut buf = vec![0u8; IO_BUF];
+    let mut n = 0u64;
+    loop {
+        match f.read(&mut buf) {
+            Ok(0) => break,
+            Ok(k) => {
+                h.update(&buf[..k]);
+                n += k as u64;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(format!("read {path}: {e}")),
+        }
+    }
+    buf.zeroize();
+    Ok((hex::encode(&h.finalize()), n))
 }
 
 // --- transform pipeline -------------------------------------------------
@@ -176,11 +186,15 @@ pub fn encrypt_file(
         if is_dir {
             archive::pack(src, &mut enc, &mut |d| progress(d, total))?;
         } else {
-            let mut r = Counting {
-                inner: File::open(src)?,
-                done: 0,
-                report: |d| progress(d, total),
-            };
+            // 1 MiB reads (io::copy's 8 KiB would mean 128x more progress calls).
+            let mut r = std::io::BufReader::with_capacity(
+                IO_BUF,
+                Counting {
+                    inner: File::open(src)?,
+                    done: 0,
+                    report: |d| progress(d, total),
+                },
+            );
             std::io::copy(&mut r, &mut enc)?;
         }
         enc.finish()?.sync_all()

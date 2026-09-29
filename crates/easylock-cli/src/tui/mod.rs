@@ -37,6 +37,10 @@ struct App {
     help: bool,
     status: (String, Color),
     quit: bool,
+    /// Bit `i` set: live tool `i` has edited inputs and needs recomputing.
+    /// Recomputation is deferred to [`App::settle`], once per frame, so a
+    /// burst of keys (paste, key repeat) costs one run instead of one per key.
+    stale: u64,
 }
 
 impl App {
@@ -49,6 +53,7 @@ impl App {
             help: false,
             status: (String::new(), DIM),
             quit: false,
+            stale: 0,
         };
         app.recompute_live();
         app
@@ -73,7 +78,51 @@ impl App {
         }
     }
 
+    /// Recompute every live tool whose inputs changed since the last frame.
+    fn settle(&mut self) {
+        let lang = self.lang;
+        while self.stale != 0 {
+            let i = self.stale.trailing_zeros() as usize;
+            self.stale &= self.stale - 1;
+            if let Some(tool) = self.tools.get_mut(i) {
+                if tool.live {
+                    tool.run(lang);
+                }
+            }
+        }
+    }
+
+    fn mark_stale(&mut self) {
+        if self.selected < 64 {
+            self.stale |= 1 << self.selected;
+        } else {
+            self.recompute_live();
+        }
+    }
+
+    fn on_event(&mut self, ev: Event) {
+        match ev {
+            Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key(key),
+            Event::Paste(text) => self.on_paste(&text),
+            _ => {}
+        }
+    }
+
+    /// Insert pasted text into the focused text field in one step.
+    fn on_paste(&mut self, text: &str) {
+        let Focus::Field(i) = self.focus else {
+            return;
+        };
+        let field = &mut self.tool_mut().fields[i];
+        if matches!(field.kind, FieldKind::Text | FieldKind::Secret) {
+            let text = text.replace("\r\n", "\n").replace('\r', "\n");
+            field.value.push_str(&text);
+            self.mark_stale();
+        }
+    }
+
     fn run_action(&mut self) {
+        self.settle();
         let lang = self.lang;
         let tool = self.tool_mut();
         tool.run(lang);
@@ -221,7 +270,6 @@ impl App {
             _ => {}
         }
 
-        let lang = self.lang;
         let field = &mut self.tool_mut().fields[i];
         let changed = match &field.kind {
             FieldKind::Text | FieldKind::Secret => match key.code {
@@ -281,10 +329,7 @@ impl App {
             },
         };
         if changed {
-            let tool = self.tool_mut();
-            if tool.live {
-                tool.run(lang);
-            }
+            self.mark_stale();
         }
     }
 }
@@ -688,11 +733,13 @@ fn centered(area: Rect, w: u16, h: u16) -> Rect {
 
 fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> std::io::Result<()> {
     while !app.quit {
+        app.settle();
         terminal.draw(|f| draw(f, app))?;
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                app.on_key(key);
-            }
+        // Block for one event, then drain everything already queued so a burst
+        // (paste without bracketed-paste support, key repeat) renders once.
+        app.on_event(event::read()?);
+        while !app.quit && event::poll(std::time::Duration::ZERO)? {
+            app.on_event(event::read()?);
         }
     }
     Ok(())
@@ -701,8 +748,11 @@ fn event_loop(terminal: &mut DefaultTerminal, app: &mut App) -> std::io::Result<
 /// Launch the TUI. Restores the terminal even on error.
 pub fn run(lang: Lang) -> Result<(), CliError> {
     let mut terminal = ratatui::init();
+    // Pastes arrive as one `Event::Paste` instead of one key event per character.
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), event::EnableBracketedPaste);
     let mut app = App::new(lang);
     let res = event_loop(&mut terminal, &mut app);
+    let _ = ratatui::crossterm::execute!(std::io::stdout(), event::DisableBracketedPaste);
     ratatui::restore();
     res.map_err(|e| CliError::new(Msg::TerminalError(e.to_string())))
 }
@@ -713,7 +763,8 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
-    fn render(app: &App) -> String {
+    fn render(app: &mut App) -> String {
+        app.settle();
         let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
         term.draw(|f| draw(f, app)).unwrap();
         let buf = term.backend().buffer().clone();
@@ -734,8 +785,8 @@ mod tests {
             (Lang::Tr, "Araçlar"),
             (Lang::Es, "Herramientas"),
         ] {
-            let app = App::new(lang);
-            assert!(render(&app).contains(needle), "{lang:?}");
+            let mut app = App::new(lang);
+            assert!(render(&mut app).contains(needle), "{lang:?}");
         }
     }
 
@@ -746,7 +797,7 @@ mod tests {
         for c in "abc".chars() {
             app.on_key(KeyEvent::from(KeyCode::Char(c)));
         }
-        let out = render(&app);
+        let out = render(&mut app);
         assert!(out.contains("ba7816bf8f01cfea414140de5dae2223"), "{out}");
     }
 
@@ -756,7 +807,7 @@ mod tests {
         app.on_key(KeyEvent::from(KeyCode::F(2)));
         assert_eq!(app.lang, Lang::Tr);
         app.on_key(KeyEvent::from(KeyCode::F(1)));
-        assert!(render(&app).contains("Klavye kısayolları"));
+        assert!(render(&mut app).contains("Klavye kısayolları"));
     }
 
     #[test]
@@ -765,7 +816,41 @@ mod tests {
         for i in 0..app.tools.len() {
             app.selected = i;
             app.run_action();
-            let _ = render(&app);
+            let _ = render(&mut app);
         }
+    }
+
+    /// A paste lands in one event: one edit, one live recompute.
+    #[test]
+    fn bracketed_paste_inserts_whole_text() {
+        let mut app = App::new(Lang::En);
+        app.on_key(KeyEvent::from(KeyCode::Enter));
+        app.on_event(Event::Paste("ab".into()));
+        app.on_event(Event::Paste("c".into()));
+        assert!(render(&mut app).contains("ba7816bf8f01cfea414140de5dae2223"));
+    }
+
+    /// Typing only marks the tool stale; the hash is computed once at settle
+    /// time and matches the per-key result.
+    #[test]
+    fn key_burst_recomputes_once_per_frame() {
+        let mut app = App::new(Lang::En);
+        app.on_key(KeyEvent::from(KeyCode::Enter));
+        let long: String = (0..20_000)
+            .map(|i| char::from(b'a' + (i % 26) as u8))
+            .collect();
+        let t = std::time::Instant::now();
+        for c in long.chars() {
+            app.on_key(KeyEvent::from(KeyCode::Char(c)));
+        }
+        let out = render(&mut app);
+        assert!(
+            t.elapsed() < std::time::Duration::from_secs(1),
+            "{:?}",
+            t.elapsed()
+        );
+        let expect =
+            easylock_core::encode::hex::encode(&easylock_core::hash::sha256::hash(long.as_bytes()));
+        assert!(out.contains(&expect[..32]), "{out}");
     }
 }
