@@ -340,7 +340,7 @@
   .overlay { @apply fixed inset-0 z-[60] flex items-start justify-center px-4 pt-[14vh]; background: rgb(0 0 0 / .18); }
   .dialog {
     @apply w-full overflow-hidden rounded-[14px];
-    background: color-mix(in srgb, var(--mac-window) 84%, transparent);
+    background: color-mix(in srgb, var(--mac-window) 96%, transparent);
     backdrop-filter: blur(40px) saturate(1.8);
     -webkit-backdrop-filter: blur(40px) saturate(1.8);
     box-shadow: var(--mac-shadow);
