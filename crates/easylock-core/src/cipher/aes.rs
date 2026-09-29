@@ -12,9 +12,9 @@
 //! | aarch64  | ARMv8 crypto (`aese` / `aesmc`)        | constant-time S-box   |
 //! | other    | —                                      | constant-time S-box   |
 //!
-//! The portable path computes the S-box as `x^254` in GF(2^8) plus the affine
-//! map, with a branch-free field multiply, so it has no secret-dependent memory
-//! access or control flow.
+//! The portable path is bitsliced (four blocks per pass, Boyar–Peralta S-box
+//! circuit): pure register logic with no secret-dependent memory access or
+//! control flow.
 
 use super::BlockCipher;
 use crate::secure::Zeroize;
@@ -79,6 +79,8 @@ fn select_backend() -> Backend {
 #[derive(Clone)]
 pub struct Aes256 {
     round_keys: [[u8; 16]; ROUND_KEYS],
+    /// Bitsliced round keys; only filled for [`Backend::Portable`].
+    sliced: soft::SlicedKeys,
     backend: Backend,
 }
 
@@ -95,9 +97,16 @@ impl Aes256 {
         k.copy_from_slice(key);
         let round_keys = soft::expand_key_256(&k);
         k.zeroize();
+        let backend = select_backend();
+        let sliced = if backend == Backend::Portable {
+            soft::slice_keys(&round_keys)
+        } else {
+            [[0; 8]; ROUND_KEYS]
+        };
         Ok(Self {
             round_keys,
-            backend: select_backend(),
+            sliced,
+            backend,
         })
     }
 
@@ -123,40 +132,52 @@ impl Aes256 {
                 // detection confirmed the `aes` feature is present.
                 unsafe { arm::encrypt_block(&self.round_keys, block) }
             }
-            _ => soft::encrypt_block(&self.round_keys, block),
+            _ => {
+                let mut four = [*block, [0; 16], [0; 16], [0; 16]];
+                soft::encrypt4(&self.sliced, &mut four);
+                *block = four[0];
+                four[0].zeroize();
+            }
         }
     }
 
     /// Encrypt many independent blocks in place (8 at a time on hardware backends).
     pub fn encrypt_blocks(&self, blocks: &mut [[u8; 16]]) {
-        let mut groups = blocks.chunks_exact_mut(8);
-        match self.backend {
-            #[cfg(target_arch = "x86_64")]
-            Backend::AesNi => {
-                for g in &mut groups {
-                    let g: &mut [[u8; 16]; 8] = g.try_into().expect("chunk of 8");
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        if self.backend != Backend::Portable {
+            let mut groups = blocks.chunks_exact_mut(8);
+            for g in &mut groups {
+                let g: &mut [[u8; 16]; 8] = g.try_into().expect("chunk of 8");
+                match self.backend {
                     // SAFETY: `AesNi` is only selected after detecting `aes`.
-                    unsafe { x86::encrypt_blocks8(&self.round_keys, g) };
-                }
-            }
-            #[cfg(target_arch = "aarch64")]
-            Backend::Armv8 => {
-                for g in &mut groups {
-                    let g: &mut [[u8; 16]; 8] = g.try_into().expect("chunk of 8");
+                    #[cfg(target_arch = "x86_64")]
+                    Backend::AesNi => unsafe { x86::encrypt_blocks8(&self.round_keys, g) },
                     // SAFETY: `Armv8` is only selected after detecting `aes`.
-                    unsafe { arm::encrypt_blocks8(&self.round_keys, g) };
+                    #[cfg(target_arch = "aarch64")]
+                    Backend::Armv8 => unsafe { arm::encrypt_blocks8(&self.round_keys, g) },
+                    _ => unreachable!("hardware backend"),
                 }
             }
-            _ => {
-                for g in &mut groups {
-                    for b in g {
-                        soft::encrypt_block(&self.round_keys, b);
-                    }
-                }
+            for b in groups.into_remainder() {
+                self.encrypt_block_into(b);
             }
+            return;
         }
-        for b in groups.into_remainder() {
-            self.encrypt_block_into(b);
+
+        // Portable: bitsliced, four blocks per pass; a short tail is padded.
+        let mut fours = blocks.chunks_exact_mut(4);
+        for g in &mut fours {
+            soft::encrypt4(&self.sliced, g.try_into().expect("chunk of 4"));
+        }
+        let rest = fours.into_remainder();
+        if !rest.is_empty() {
+            let mut four = [[0u8; 16]; 4];
+            four[..rest.len()].copy_from_slice(rest);
+            soft::encrypt4(&self.sliced, &mut four);
+            rest.copy_from_slice(&four[..rest.len()]);
+            for b in &mut four {
+                b.zeroize();
+            }
         }
     }
 
@@ -181,6 +202,9 @@ impl Drop for Aes256 {
     fn drop(&mut self) {
         for rk in &mut self.round_keys {
             rk.zeroize();
+        }
+        for sk in &mut self.sliced {
+            sk.zeroize();
         }
     }
 }
@@ -238,6 +262,35 @@ mod tests {
     #[test]
     fn rejects_wrong_key_length() {
         assert!(Aes256::new(&[0u8; 16]).is_err());
+    }
+
+    /// The bitsliced portable backend, driven through the public API, agrees
+    /// with the reference cipher for every batch length (remainder handling).
+    #[test]
+    fn portable_backend_all_batch_lengths() {
+        let key: [u8; 32] = core::array::from_fn(|i| (i * 7 + 3) as u8);
+        let rk = soft::expand_key_256(&key);
+        let aes = Aes256 {
+            round_keys: rk,
+            sliced: soft::slice_keys(&rk),
+            backend: Backend::Portable,
+        };
+        for n in 0..=19 {
+            let mut blocks: alloc::vec::Vec<[u8; 16]> = (0..n)
+                .map(|b| core::array::from_fn(|i| (b * 31 + i) as u8))
+                .collect();
+            let mut want = blocks.clone();
+            for b in &mut want {
+                soft::encrypt_block(&rk, b);
+            }
+            aes.encrypt_blocks(&mut blocks);
+            assert_eq!(blocks, want, "n = {n}");
+        }
+        let mut one = [0x5au8; 16];
+        let mut want = one;
+        soft::encrypt_block(&rk, &mut want);
+        aes.encrypt_block_into(&mut one);
+        assert_eq!(one, want);
     }
 
     #[test]

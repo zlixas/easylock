@@ -38,6 +38,8 @@ pub struct Features {
     pub avx2: bool,
     /// SHA-2 message-schedule instructions.
     pub sha2: bool,
+    /// SHA-512 round instructions (ARMv8.2 `FEAT_SHA512`). Always `false` on x86.
+    pub sha512: bool,
 }
 
 impl Features {
@@ -66,6 +68,7 @@ mod detect {
             clmul: std::arch::is_x86_feature_detected!("pclmulqdq"),
             avx2: std::arch::is_x86_feature_detected!("avx2"),
             sha2: std::arch::is_x86_feature_detected!("sha"),
+            sha512: false,
         }
     }
 
@@ -76,6 +79,8 @@ mod detect {
             clmul: std::arch::is_aarch64_feature_detected!("pmull"),
             avx2: false,
             sha2: std::arch::is_aarch64_feature_detected!("sha2"),
+            // Rust groups FEAT_SHA512 with FEAT_SHA3 under the `sha3` feature.
+            sha512: std::arch::is_aarch64_feature_detected!("sha3"),
         }
     }
 
@@ -97,6 +102,7 @@ mod detect {
             clmul: cfg!(any(target_feature = "pclmulqdq", target_feature = "aes")),
             avx2: cfg!(target_feature = "avx2"),
             sha2: cfg!(any(target_feature = "sha", target_feature = "sha2")),
+            sha512: cfg!(all(target_arch = "aarch64", target_feature = "sha3")),
         }
     }
 }

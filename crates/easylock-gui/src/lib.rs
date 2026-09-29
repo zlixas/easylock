@@ -32,7 +32,7 @@ fn sys_info() -> SysInfo {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn hash_text(input: String, is_base64: bool, algo: String) -> Result<String, String> {
     let data = if is_base64 {
         easylock_core::encode::base64::decode(
@@ -52,7 +52,7 @@ pub struct HashFileResult {
     size: u64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn hash_file(path: String, algo: String) -> Result<HashFileResult, String> {
     let (digest, size) = crypto::hash_file_path(&path, &algo)?;
     Ok(HashFileResult { digest, size })
@@ -78,24 +78,41 @@ struct Progress {
     total: u64,
 }
 
-#[tauri::command]
+/// A progress callback that emits at most ~200 `file-progress` events per
+/// operation (every 0.5 % or 1 MiB, whichever is larger, plus the last one),
+/// so large files do not flood the webview with IPC messages.
+fn progress_emitter(window: Window, op: &'static str) -> impl FnMut(u64, u64) {
+    let mut last: Option<u64> = None;
+    move |done, total| {
+        let step = (total / 200).max(1 << 20);
+        let due = match last {
+            None => true,
+            Some(prev) => done >= total || done >= prev.saturating_add(step),
+        };
+        if due {
+            last = Some(done);
+            let _ = window.emit("file-progress", Progress { op, done, total });
+        }
+    }
+}
+
+// Commands that do real work are `async`: Tauri then runs them on its worker
+// pool instead of the main thread, so the window keeps repainting (and shows
+// progress) while a large file is processed.
+
+#[tauri::command(async)]
 fn encrypt_file(
     window: Window,
     path: String,
     cipher: String,
     password: String,
 ) -> Result<FileOpResult, String> {
-    let w = window.clone();
-    let op = crypto::encrypt_file(&path, &cipher, password, move |done, total| {
-        let _ = w.emit(
-            "file-progress",
-            Progress {
-                op: "encrypt",
-                done,
-                total,
-            },
-        );
-    })?;
+    let op = crypto::encrypt_file(
+        &path,
+        &cipher,
+        password,
+        progress_emitter(window, "encrypt"),
+    )?;
     Ok(FileOpResult {
         out_path: op.out_path,
         cipher: op.cipher.to_string(),
@@ -104,19 +121,9 @@ fn encrypt_file(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn decrypt_file(window: Window, path: String, password: String) -> Result<FileOpResult, String> {
-    let w = window.clone();
-    let op = crypto::decrypt_file(&path, password, move |done, total| {
-        let _ = w.emit(
-            "file-progress",
-            Progress {
-                op: "decrypt",
-                done,
-                total,
-            },
-        );
-    })?;
+    let op = crypto::decrypt_file(&path, password, progress_emitter(window, "decrypt"))?;
     Ok(FileOpResult {
         out_path: op.out_path,
         cipher: op.cipher.to_string(),
@@ -136,7 +143,7 @@ fn gen_password(
     crypto::gen_password(length, lower, upper, digits, symbols)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn gen_argon2(
     password: String,
     m_cost: u32,

@@ -107,6 +107,24 @@ pub struct Sha512 {
 }
 
 impl Sha512 {
+    /// Compress every 128-byte block of `blocks` (length must be a multiple of
+    /// 128), using the SHA-512 instructions when the CPU has them.
+    fn compress_blocks(state: &mut [u64; 8], blocks: &[u8]) {
+        debug_assert_eq!(blocks.len() % 128, 0);
+        if blocks.is_empty() {
+            return;
+        }
+        #[cfg(all(target_arch = "aarch64", not(feature = "force-portable")))]
+        if crate::cpu::features().sha512 {
+            // SAFETY: FEAT_SHA512 (Rust's `sha3` feature) was detected at runtime.
+            unsafe { hw_arm::compress_blocks(state, blocks) };
+            return;
+        }
+        for b in blocks.chunks_exact(128) {
+            Self::compress(state, b.try_into().expect("128 bytes"));
+        }
+    }
+
     fn compress(state: &mut [u64; 8], block: &[u8; 128]) {
         let mut w = [0u64; 80];
         for (i, chunk) in block.chunks_exact(8).enumerate() {
@@ -162,6 +180,87 @@ impl Sha512 {
     }
 }
 
+/// ARMv8.2 SHA-512 instructions (`SHA512H`, `SHA512H2`, `SHA512SU0/1`).
+#[cfg(all(target_arch = "aarch64", not(feature = "force-portable")))]
+mod hw_arm {
+    use super::K;
+    use core::arch::aarch64::{
+        uint64x2_t, vaddq_u64, vextq_u64, vld1q_u64, vld1q_u8, vreinterpretq_u64_u8, vrev64q_u8,
+        vsha512h2q_u64, vsha512hq_u64, vsha512su0q_u64, vsha512su1q_u64, vst1q_u64,
+    };
+
+    /// Two rounds. The four state registers rotate roles every call, so the
+    /// caller passes them in the order `(ab, cd, ef, gh)` for that round pair.
+    #[inline(always)]
+    unsafe fn round2(
+        wk: uint64x2_t,
+        ab: uint64x2_t,
+        cd: &mut uint64x2_t,
+        ef: uint64x2_t,
+        gh: &mut uint64x2_t,
+    ) {
+        // SAFETY: register-only intrinsics; the caller enables `sha3`.
+        unsafe {
+            let sum = vaddq_u64(vextq_u64(wk, wk, 1), *gh);
+            let t = vsha512hq_u64(sum, vextq_u64(ef, *gh, 1), vextq_u64(*cd, ef, 1));
+            *gh = vsha512h2q_u64(t, *cd, ab);
+            *cd = vaddq_u64(*cd, t);
+        }
+    }
+
+    /// # Safety
+    /// Requires the `sha3` target feature (FEAT_SHA512); `blocks.len()` must
+    /// be a multiple of 128.
+    #[target_feature(enable = "neon,sha3")]
+    pub(super) unsafe fn compress_blocks(state: &mut [u64; 8], blocks: &[u8]) {
+        // SAFETY: all loads/stores address 16-byte windows inside `state`, `K`
+        // (80 words) or the current 128-byte block; NEON accesses are
+        // unaligned-safe.
+        unsafe {
+            let sp = state.as_mut_ptr();
+            let (mut ab, mut cd, mut ef, mut gh) = (
+                vld1q_u64(sp),
+                vld1q_u64(sp.add(2)),
+                vld1q_u64(sp.add(4)),
+                vld1q_u64(sp.add(6)),
+            );
+            for block in blocks.chunks_exact(128) {
+                let orig = (ab, cd, ef, gh);
+                let p = block.as_ptr();
+                let mut m: [uint64x2_t; 8] = core::array::from_fn(|i| {
+                    vreinterpretq_u64_u8(vrev64q_u8(vld1q_u8(p.add(16 * i))))
+                });
+                for r in 0..5 {
+                    for j in 0..8 {
+                        if r > 0 {
+                            m[j] = vsha512su1q_u64(
+                                vsha512su0q_u64(m[j], m[(j + 1) % 8]),
+                                m[(j + 7) % 8],
+                                vextq_u64(m[(j + 4) % 8], m[(j + 5) % 8], 1),
+                            );
+                        }
+                        let wk = vaddq_u64(m[j], vld1q_u64(K.as_ptr().add(16 * r + 2 * j)));
+                        match j % 4 {
+                            0 => round2(wk, ab, &mut cd, ef, &mut gh),
+                            1 => round2(wk, gh, &mut ab, cd, &mut ef),
+                            2 => round2(wk, ef, &mut gh, ab, &mut cd),
+                            _ => round2(wk, cd, &mut ef, gh, &mut ab),
+                        }
+                    }
+                }
+                ab = vaddq_u64(ab, orig.0);
+                cd = vaddq_u64(cd, orig.1);
+                ef = vaddq_u64(ef, orig.2);
+                gh = vaddq_u64(gh, orig.3);
+            }
+            vst1q_u64(sp, ab);
+            vst1q_u64(sp.add(2), cd);
+            vst1q_u64(sp.add(4), ef);
+            vst1q_u64(sp.add(6), gh);
+        }
+    }
+}
+
 impl Hash for Sha512 {
     const OUTPUT_LEN: usize = 64;
     const BLOCK_LEN: usize = 128;
@@ -189,17 +288,13 @@ impl Hash for Sha512 {
                 return; // buffer still partial; input exhausted
             }
             let block = self.buf;
-            Self::compress(&mut self.state, &block);
+            Self::compress_blocks(&mut self.state, &block);
             self.buf_len = 0;
         }
 
-        let mut chunks = data.chunks_exact(128);
-        for chunk in &mut chunks {
-            let mut block = [0u8; 128];
-            block.copy_from_slice(chunk);
-            Self::compress(&mut self.state, &block);
-        }
-        let rem = chunks.remainder();
+        let whole = data.len() - data.len() % 128;
+        Self::compress_blocks(&mut self.state, &data[..whole]);
+        let rem = &data[whole..];
         self.buf[..rem.len()].copy_from_slice(rem);
         self.buf_len = rem.len();
     }
@@ -268,6 +363,25 @@ mod tests {
             encode(&hash(b"abc")),
             "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a\
              2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+        );
+    }
+
+    #[test]
+    fn hardware_matches_portable() {
+        let data: alloc::vec::Vec<u8> = (0..128 * 9 + 77).map(|i| (i * 31 + 7) as u8).collect();
+        for len in [0, 1, 111, 112, 127, 128, 129, 255, 256, 1000, data.len()] {
+            let whole = len - len % 128;
+            let mut hw = H0;
+            Sha512::compress_blocks(&mut hw, &data[..whole]);
+            let mut sw = H0;
+            for b in data[..whole].chunks_exact(128) {
+                Sha512::compress(&mut sw, b.try_into().unwrap());
+            }
+            assert_eq!(hw, sw, "len {len}");
+        }
+        eprintln!(
+            "sha512 hardware available: {}",
+            crate::cpu::features().sha512
         );
     }
 

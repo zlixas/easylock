@@ -117,11 +117,86 @@ impl Algorithm {
             Algorithm::Blake3 => digest::<Blake3>(data),
         }
     }
+
+    /// A streaming hasher for this algorithm (hash large inputs in pieces,
+    /// with constant memory).
+    #[must_use]
+    pub fn hasher(self) -> Hasher {
+        match self {
+            Algorithm::Sha256 => Hasher::Sha256(Sha256::init()),
+            Algorithm::Sha512 => Hasher::Sha512(Sha512::init()),
+            Algorithm::Keccak256 => Hasher::Keccak256(Keccak256::init()),
+            Algorithm::Sha3_256 => Hasher::Sha3_256(Sha3_256::init()),
+            Algorithm::Blake3 => Hasher::Blake3(Blake3::init()),
+        }
+    }
+}
+
+/// A streaming hash whose algorithm is chosen at run time.
+// Variant sizes differ (Blake3 keeps a chunk stack); it is a short-lived
+// stack value, so boxing would only add an allocation.
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
+pub enum Hasher {
+    Sha256(Sha256),
+    Sha512(Sha512),
+    Keccak256(Keccak256),
+    Sha3_256(Sha3_256),
+    Blake3(Blake3),
+}
+
+impl Hasher {
+    /// Absorb more input.
+    pub fn update(&mut self, data: &[u8]) {
+        match self {
+            Hasher::Sha256(h) => h.update(data),
+            Hasher::Sha512(h) => h.update(data),
+            Hasher::Keccak256(h) => h.update(data),
+            Hasher::Sha3_256(h) => h.update(data),
+            Hasher::Blake3(h) => h.update(data),
+        }
+    }
+
+    /// Finish and return the digest.
+    #[must_use]
+    pub fn finalize(self) -> Vec<u8> {
+        match self {
+            Hasher::Sha256(h) => h.finalize_vec(),
+            Hasher::Sha512(h) => h.finalize_vec(),
+            Hasher::Keccak256(h) => h.finalize_vec(),
+            Hasher::Sha3_256(h) => h.finalize_vec(),
+            Hasher::Blake3(h) => h.finalize_vec(),
+        }
+    }
+}
+
+impl core::fmt::Debug for Hasher {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("Hasher(..)")
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streaming_hasher_matches_oneshot() {
+        let data: Vec<u8> = (0..10_000u32).map(|i| (i * 7 + 1) as u8).collect();
+        for alg in [
+            Algorithm::Sha256,
+            Algorithm::Sha512,
+            Algorithm::Keccak256,
+            Algorithm::Sha3_256,
+            Algorithm::Blake3,
+        ] {
+            let mut h = alg.hasher();
+            for piece in data.chunks(777) {
+                h.update(piece);
+            }
+            assert_eq!(h.finalize(), alg.hash(&data), "{}", alg.name());
+        }
+    }
 
     #[test]
     fn empty_string_digests() {

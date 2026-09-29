@@ -39,6 +39,72 @@ pub fn gf_mul(x: u128, h: u128) -> u128 {
     z
 }
 
+/// Low 64 bits of the carry-less product `x * y`, using ordinary integer
+/// multiplication on operands with 3-bit "holes" between the bits of each
+/// residue class mod 4 (BearSSL `ghash_ctmul64`). The holes absorb the carries,
+/// and integer multiplication is constant-time on every mainstream CPU.
+#[inline(always)]
+fn bmul64(x: u64, y: u64) -> u64 {
+    const M0: u64 = 0x1111_1111_1111_1111;
+    const M1: u64 = 0x2222_2222_2222_2222;
+    const M2: u64 = 0x4444_4444_4444_4444;
+    const M3: u64 = 0x8888_8888_8888_8888;
+    let (x0, x1, x2, x3) = (x & M0, x & M1, x & M2, x & M3);
+    let (y0, y1, y2, y3) = (y & M0, y & M1, y & M2, y & M3);
+    let m = u64::wrapping_mul;
+    let z0 = m(x0, y0) ^ m(x1, y3) ^ m(x2, y2) ^ m(x3, y1);
+    let z1 = m(x0, y1) ^ m(x1, y0) ^ m(x2, y3) ^ m(x3, y2);
+    let z2 = m(x0, y2) ^ m(x1, y1) ^ m(x2, y0) ^ m(x3, y3);
+    let z3 = m(x0, y3) ^ m(x1, y2) ^ m(x2, y1) ^ m(x3, y0);
+    (z0 & M0) | (z1 & M1) | (z2 & M2) | (z3 & M3)
+}
+
+/// Portable constant-time GF(2^128) multiply (same bit convention as
+/// [`gf_mul`]): three 64x64 carry-less products per half via Karatsuba (the
+/// high halves via bit reversal), then a shift-only reduction. Roughly an
+/// order of magnitude faster than the bit-at-a-time loop, especially on
+/// 32-bit targets such as `wasm32` where `u128` is emulated.
+#[must_use]
+pub fn gf_mul_ct64(x: u128, h: u128) -> u128 {
+    let (y1, y0) = ((x >> 64) as u64, x as u64);
+    let (h1, h0) = ((h >> 64) as u64, h as u64);
+    let (h0r, h1r) = (h0.reverse_bits(), h1.reverse_bits());
+    let (h2, h2r) = (h0 ^ h1, h0r ^ h1r);
+    let (y0r, y1r) = (y0.reverse_bits(), y1.reverse_bits());
+    let (y2, y2r) = (y0 ^ y1, y0r ^ y1r);
+
+    let z0 = bmul64(y0, h0);
+    let z1 = bmul64(y1, h1);
+    let mut z2 = bmul64(y2, h2);
+    let mut z0h = bmul64(y0r, h0r);
+    let mut z1h = bmul64(y1r, h1r);
+    let mut z2h = bmul64(y2r, h2r);
+    z2 ^= z0 ^ z1;
+    z2h ^= z0h ^ z1h;
+    z0h = z0h.reverse_bits() >> 1;
+    z1h = z1h.reverse_bits() >> 1;
+    z2h = z2h.reverse_bits() >> 1;
+
+    let mut v0 = z0;
+    let mut v1 = z0h ^ z2;
+    let mut v2 = z1 ^ z2h;
+    let mut v3 = z1h;
+
+    // The product of two bit-reflected values is off by one bit: shift left.
+    v3 = (v3 << 1) | (v2 >> 63);
+    v2 = (v2 << 1) | (v1 >> 63);
+    v1 = (v1 << 1) | (v0 >> 63);
+    v0 <<= 1;
+
+    // Reduce modulo x^128 + x^7 + x^2 + x + 1 (reflected).
+    v2 ^= v0 ^ (v0 >> 1) ^ (v0 >> 2) ^ (v0 >> 7);
+    v1 ^= (v0 << 63) ^ (v0 << 62) ^ (v0 << 57);
+    v3 ^= v1 ^ (v1 >> 1) ^ (v1 >> 2) ^ (v1 >> 7);
+    v2 ^= (v1 << 63) ^ (v1 << 62) ^ (v1 << 57);
+
+    (u128::from(v3) << 64) | u128::from(v2)
+}
+
 /// Which multiply [`GHash`] dispatched to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
@@ -250,7 +316,7 @@ impl GHash {
                 // detection confirmed `pmull`.
                 unsafe { clmul::mul(x, self.h_rev) }
             }
-            _ => gf_mul(x, self.h),
+            _ => gf_mul_ct64(x, self.h),
         }
     }
 
@@ -344,6 +410,29 @@ mod tests {
         let one = 1u128 << 127;
         let x = 0xdead_beef_0000_0000_cafe_babe_0000_0001u128;
         assert_eq!(gf_mul(x, one), x);
+    }
+
+    /// The fast portable multiply agrees with the bit-at-a-time reference,
+    /// including the edge operands (0, 1, all-ones, single high/low bits).
+    #[test]
+    fn ct64_matches_bitwise_reference() {
+        let mut s = 0x243f_6a88_85a3_08d3_1319_8a2e_0370_7344_u128;
+        let mut next = || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        let edges = [0u128, 1, 1 << 127, u128::MAX, 1 << 63, 1 << 64, 0x87];
+        for &a in &edges {
+            for &b in &edges {
+                assert_eq!(gf_mul_ct64(a, b), gf_mul(a, b), "{a:x} * {b:x}");
+            }
+        }
+        for _ in 0..2000 {
+            let (a, b) = (next(), next());
+            assert_eq!(gf_mul_ct64(a, b), gf_mul(a, b));
+        }
     }
 
     /// The carry-less backend must agree with the portable one on random inputs.

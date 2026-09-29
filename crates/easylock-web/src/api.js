@@ -17,8 +17,16 @@ export function hexToBytes(hex) {
   for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
   return out;
 }
+const HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 export function bytesToHex(b) {
-  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  // Table lookup in 32 KiB slices: no per-byte closures or intermediate arrays.
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) {
+    const part = new Array(Math.min(0x8000, b.length - i));
+    for (let j = 0; j < part.length; j++) part[j] = HEX[b[i + j]];
+    s += part.join("");
+  }
+  return s;
 }
 export function bytesToB64(b) {
   let s = "";

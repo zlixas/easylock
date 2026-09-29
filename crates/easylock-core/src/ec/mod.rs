@@ -1,12 +1,14 @@
 //! Curve25519: X25519 ECDH (RFC 7748) and Ed25519 signatures (RFC 8032).
 //!
-//! The field and group arithmetic is a Rust port of the public-domain
-//! **TweetNaCl** reference (D. J. Bernstein et al.), chosen because it is tiny,
-//! widely cross-checked, and uses only 64-bit integer math (portable, no
-//! `u128`-in-`no_std` concerns). Scalar clamping, the Montgomery ladder, and the
-//! Edwards `cswap` are branch-free on the secret bits.
+//! Field arithmetic is radix 2^51 (five `u64` limbs, `u128` products); group
+//! arithmetic follows ref10's point representations with a precomputed
+//! fixed-base table. Everything that touches a secret — scalar clamping, the
+//! Montgomery ladder, fixed-base table lookups — is branch-free on the secret
+//! bits. Only signature verification (public inputs) uses variable-time code.
 
+mod base_table;
 pub mod ed25519;
+pub mod edwards;
 pub mod field25519;
 pub mod x25519;
 

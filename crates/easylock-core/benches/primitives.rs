@@ -6,7 +6,7 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use easylock_core::aead::{Aead, Aes256Gcm, ChaCha20Poly1305};
 use easylock_core::cipher::aes::Aes256;
-use easylock_core::ec::{x25519_base, SigningKey};
+use easylock_core::ec::{x25519, x25519_base, SigningKey};
 use easylock_core::hash::Hash;
 use easylock_core::hash::{Blake3, Keccak256, Sha256, Sha3_256, Sha512};
 
@@ -137,6 +137,10 @@ fn bench_curve25519(c: &mut Criterion) {
     let seed = [7u8; 32];
     group.bench_function("x25519-base", |b| {
         b.iter(|| black_box(x25519_base(black_box(&seed))));
+    });
+    let peer = x25519_base(&[0x42; 32]);
+    group.bench_function("x25519-dh", |b| {
+        b.iter(|| black_box(x25519(black_box(&seed), black_box(&peer))));
     });
     let sk = SigningKey::from_seed(seed);
     let vk = sk.verifying_key();
