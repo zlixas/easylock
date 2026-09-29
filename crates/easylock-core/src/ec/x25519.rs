@@ -1,7 +1,7 @@
 //! X25519 ECDH (RFC 7748). Port of TweetNaCl `crypto_scalarmult`.
 
 use super::field25519::{
-    fadd, fmul, fsq, fsub, inv25519, sel25519, to_bytes, unpack25519, Gf, D121665, GF0,
+    fadd, fmul, fmul121666, fsq, fsub, inv25519, sel25519, to_bytes, unpack25519, GF0, GF1,
 };
 use crate::ct::ct_eq_fixed;
 use crate::secure::{Secret, Zeroize};
@@ -90,67 +90,67 @@ impl core::fmt::Debug for SharedSecret {
     }
 }
 
-/// Raw scalar multiplication `X25519(scalar, u_coordinate)`.
+fn clamp(scalar: &[u8; 32]) -> [u8; 32] {
+    let mut z = *scalar;
+    z[31] = (z[31] & 127) | 64;
+    z[0] &= 248;
+    z
+}
+
+/// Raw scalar multiplication `X25519(scalar, u_coordinate)`: the RFC 7748
+/// Montgomery ladder, swapping only when consecutive scalar bits differ.
 #[must_use]
 pub fn x25519(scalar: &[u8; 32], point: &[u8; 32]) -> [u8; 32] {
-    let mut z = [0u8; 32];
-    z[..31].copy_from_slice(&scalar[..31]);
-    z[31] = (scalar[31] & 127) | 64;
-    z[0] &= 248;
+    let mut z = clamp(scalar);
+    let x1 = unpack25519(point);
 
-    let x = unpack25519(point);
-
-    let mut a: Gf = GF0;
-    let mut b: Gf = x;
-    let mut c: Gf = GF0;
-    let mut d: Gf = GF0;
-    a[0] = 1;
-    d[0] = 1;
+    let (mut x2, mut z2, mut x3, mut z3) = (GF1, GF0, x1, GF1);
+    let mut swap = 0i64;
 
     for i in (0..=254).rev() {
         let bit = i64::from((z[i >> 3] >> (i & 7)) & 1);
-        sel25519(&mut a, &mut b, bit);
-        sel25519(&mut c, &mut d, bit);
+        swap ^= bit;
+        sel25519(&mut x2, &mut x3, swap);
+        sel25519(&mut z2, &mut z3, swap);
+        swap = bit;
 
-        let e = fadd(a, c);
-        a = fsub(a, c);
-        c = fadd(b, d);
-        b = fsub(b, d);
-        d = fsq(e);
-        let f = fsq(a);
-        a = fmul(c, a);
-        c = fmul(b, e);
-        let e2 = fadd(a, c);
-        a = fsub(a, c);
-        b = fsq(a);
-        c = fsub(d, f);
-        a = fmul(c, D121665);
-        a = fadd(a, d);
-        c = fmul(c, a);
-        a = fmul(d, f);
-        d = fmul(b, x);
-        b = fsq(e2);
-
-        sel25519(&mut a, &mut b, bit);
-        sel25519(&mut c, &mut d, bit);
+        let a = fadd(x2, z2);
+        let b = fsub(x2, z2);
+        let c = fadd(x3, z3);
+        let d = fsub(x3, z3);
+        let aa = fsq(a);
+        let bb = fsq(b);
+        let da = fmul(d, a);
+        let cb = fmul(c, b);
+        let e = fsub(aa, bb);
+        x3 = fsq(fadd(da, cb));
+        z3 = fmul(x1, fsq(fsub(da, cb)));
+        x2 = fmul(aa, bb);
+        z2 = fmul(e, fadd(bb, fmul121666(e)));
     }
+    sel25519(&mut x2, &mut x3, swap);
+    sel25519(&mut z2, &mut z3, swap);
 
-    let result = fmul(a, inv25519(c));
-    let out = to_bytes(result);
+    let out = to_bytes(fmul(x2, inv25519(z2)));
 
     z.zeroize();
-    for arr in [&mut a, &mut b, &mut c, &mut d] {
-        arr.zeroize();
+    for fe in [&mut x2, &mut z2, &mut x3, &mut z3] {
+        fe.zeroize();
     }
     out
 }
 
 /// `X25519(scalar, 9)` — public key from a secret scalar.
+///
+/// Computed as a fixed-base Edwards multiplication (precomputed table) mapped
+/// to the Montgomery `u`-coordinate, which is several times faster than the
+/// ladder and gives the identical result.
 #[must_use]
 pub fn x25519_base(scalar: &[u8; 32]) -> [u8; 32] {
-    let mut nine = [0u8; 32];
-    nine[0] = 9;
-    x25519(scalar, &nine)
+    let mut z = clamp(scalar);
+    let out = super::edwards::base_mul_montgomery_u(&z);
+    z.zeroize();
+    out
 }
 
 #[cfg(test)]
@@ -201,6 +201,39 @@ mod tests {
         assert_eq!(
             encode(&k1),
             "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742"
+        );
+    }
+
+    /// The fixed-base Edwards path must agree with the generic ladder on `u = 9`.
+    #[test]
+    fn base_matches_ladder() {
+        let mut nine = [0u8; 32];
+        nine[0] = 9;
+        let mut s = [0u8; 32];
+        for i in 0..64u8 {
+            for (j, b) in s.iter_mut().enumerate() {
+                *b = (j as u8).wrapping_mul(29).wrapping_add(i.wrapping_mul(131)) ^ i;
+            }
+            assert_eq!(x25519_base(&s), x25519(&s, &nine), "scalar {i}");
+        }
+        assert_eq!(x25519_base(&[0xff; 32]), x25519(&[0xff; 32], &nine));
+        assert_eq!(x25519_base(&[0; 32]), x25519(&[0; 32], &nine));
+    }
+
+    /// RFC 7748 §5.2 iterated test (1 000 iterations).
+    #[test]
+    fn rfc7748_iterated_1000() {
+        let mut k = [0u8; 32];
+        k[0] = 9;
+        let mut u = k;
+        for _ in 0..1000 {
+            let r = x25519(&k, &u);
+            u = k;
+            k = r;
+        }
+        assert_eq!(
+            encode(&k),
+            "684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51"
         );
     }
 

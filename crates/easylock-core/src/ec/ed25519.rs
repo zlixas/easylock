@@ -1,14 +1,12 @@
-//! Ed25519 signatures (RFC 8032). Port of TweetNaCl's `crypto_sign` /
+//! Ed25519 signatures (RFC 8032), after TweetNaCl's `crypto_sign` /
 //! `crypto_sign_open`, restructured for detached signatures and using this
 //! crate's SHA-512.
 //!
 //! Verification follows the permissive TweetNaCl check (`[S]B = R + [h]A`); it
 //! additionally rejects non-canonical `S >= L` to remove signature malleability.
 
-use super::field25519::{
-    fadd, fmul, fsq, fsub, inv25519, par25519, pow2523, sel25519, to_bytes, unpack25519, Gf, D, D2,
-    GF0, GF1, L, SQRTM1, X, Y,
-};
+use super::edwards::{base_mul, double_scalarmult_vartime, P3};
+use super::field25519::{to_bytes, unpack25519, L};
 use crate::ct::ct_eq_fixed;
 use crate::hash::{Hash, Sha512};
 use crate::secure::{Secret, Zeroize};
@@ -19,8 +17,6 @@ pub const PUBLIC_KEY_LEN: usize = 32;
 pub const SIGNATURE_LEN: usize = 64;
 /// Byte length of an Ed25519 seed / secret key.
 pub const SEED_LEN: usize = 32;
-
-type Point = [Gf; 4];
 
 /// A detached Ed25519 signature.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -76,7 +72,7 @@ impl SigningKey {
     pub fn from_seed(seed: [u8; 32]) -> Self {
         let mut d = expand_seed(&seed);
         let a = clamp_scalar(&mut d);
-        let public = point_pack(&scalarbase(&a));
+        let public = base_mul(&a).compress();
         d.zeroize();
         Self {
             seed: Secret::from_bytes(seed),
@@ -129,93 +125,6 @@ fn clamp_scalar(d: &mut [u8; 64]) -> [u8; 32] {
     let mut a = [0u8; 32];
     a.copy_from_slice(&d[..32]);
     a
-}
-
-fn point_add(p: &mut Point, q: &Point) {
-    let a = fmul(fsub(p[1], p[0]), fsub(q[1], q[0]));
-    let b = fmul(fadd(p[0], p[1]), fadd(q[0], q[1]));
-    let c = fmul(fmul(p[3], q[3]), D2);
-    let dd = fmul(p[2], q[2]);
-    let d = fadd(dd, dd);
-    let e = fsub(b, a);
-    let f = fsub(d, c);
-    let g = fadd(d, c);
-    let h = fadd(b, a);
-    p[0] = fmul(e, f);
-    p[1] = fmul(h, g);
-    p[2] = fmul(g, f);
-    p[3] = fmul(e, h);
-}
-
-fn point_cswap(p: &mut Point, q: &mut Point, b: i64) {
-    for i in 0..4 {
-        sel25519(&mut p[i], &mut q[i], b);
-    }
-}
-
-fn scalarmult(q: &Point, s: &[u8; 32]) -> Point {
-    let mut p: Point = [GF0, GF1, GF1, GF0];
-    let mut qq = *q;
-    for i in (0..=255).rev() {
-        let b = i64::from((s[i >> 3] >> (i & 7)) & 1);
-        point_cswap(&mut p, &mut qq, b);
-        point_add(&mut qq, &p);
-        let pc = p;
-        point_add(&mut p, &pc);
-        point_cswap(&mut p, &mut qq, b);
-    }
-    p
-}
-
-fn scalarbase(s: &[u8; 32]) -> Point {
-    let q: Point = [X, Y, GF1, fmul(X, Y)];
-    scalarmult(&q, s)
-}
-
-fn point_pack(p: &Point) -> [u8; 32] {
-    let zi = inv25519(p[2]);
-    let tx = fmul(p[0], zi);
-    let ty = fmul(p[1], zi);
-    let mut r = to_bytes(ty);
-    r[31] ^= par25519(tx) << 7;
-    r
-}
-
-fn point_unpack_neg(p: &[u8; 32]) -> Option<Point> {
-    let mut r: Point = [GF0, GF0, GF1, GF0];
-    r[1] = unpack25519(p);
-
-    let mut num = fsq(r[1]);
-    let mut den = fmul(num, D);
-    num = fsub(num, r[2]);
-    den = fadd(r[2], den);
-
-    let den2 = fsq(den);
-    let den4 = fsq(den2);
-    let den6 = fmul(den4, den2);
-    let mut t = fmul(den6, num);
-    t = fmul(t, den);
-
-    t = pow2523(t);
-    t = fmul(t, num);
-    t = fmul(t, den);
-    t = fmul(t, den);
-    r[0] = fmul(t, den);
-
-    let mut chk = fmul(fsq(r[0]), den);
-    if !super::field25519::eq25519(chk, num) {
-        r[0] = fmul(r[0], SQRTM1);
-    }
-    chk = fmul(fsq(r[0]), den);
-    if !super::field25519::eq25519(chk, num) {
-        return None;
-    }
-
-    if par25519(r[0]) == (p[31] >> 7) {
-        r[0] = fsub(GF0, r[0]);
-    }
-    r[3] = fmul(r[0], r[1]);
-    Some(r)
 }
 
 /// Reduce a 64-byte little-endian value modulo `L`, returning 32 bytes.
@@ -286,7 +195,7 @@ fn sign(seed: &[u8; 32], public: &[u8; 32], msg: &[u8]) -> [u8; 64] {
     hr.finalize_into(&mut r_wide);
     let r = reduce(&r_wide);
 
-    let rr = point_pack(&scalarbase(&r));
+    let rr = base_mul(&r).compress();
 
     // h = SHA512(R || A || msg)
     let mut hh = Sha512::init();
@@ -318,23 +227,6 @@ fn sign(seed: &[u8; 32], public: &[u8; 32], msg: &[u8]) -> [u8; 64] {
     sig
 }
 
-/// `true` if `p` has small order, i.e. `[8]P` is the identity (the point lies in
-/// the torsion subgroup of order 1, 2, 4 or 8).
-fn is_small_order(p: &Point) -> bool {
-    let mut q = *p;
-    for _ in 0..3 {
-        let c = q;
-        point_add(&mut q, &c);
-    }
-    // Identity in extended coordinates: X = 0 and Y = Z.
-    let identity = {
-        let mut id = [0u8; 32];
-        id[0] = 1;
-        id
-    };
-    point_pack(&q) == identity
-}
-
 /// `true` if `enc` is the canonical encoding of its y-coordinate (y < p).
 fn is_canonical_encoding(enc: &[u8; 32]) -> bool {
     let mut y = *enc;
@@ -352,33 +244,28 @@ fn verify(public: &[u8; 32], msg: &[u8], sig: &[u8; 64]) -> bool {
     if !scalar_is_canonical(&s) || !is_canonical_encoding(public) {
         return false;
     }
-    let Some(q) = point_unpack_neg(public) else {
+    let Some(neg_a) = P3::decompress_neg(public) else {
         return false;
     };
-    let mut r_enc = [0u8; 32];
-    r_enc.copy_from_slice(&sig[..32]);
-    let Some(r_point) = point_unpack_neg(&r_enc) else {
+    let mut r = [0u8; 32];
+    r.copy_from_slice(&sig[..32]);
+    let Some(r_point) = P3::decompress_neg(&r) else {
         return false;
     };
-    if is_small_order(&q) || is_small_order(&r_point) {
+    if neg_a.is_small_order() || r_point.is_small_order() {
         return false;
     }
 
     let mut hh = Sha512::init();
-    hh.update(&sig[..32]);
+    hh.update(&r);
     hh.update(public);
     hh.update(msg);
     let mut h_wide = [0u8; 64];
     hh.finalize_into(&mut h_wide);
     let h = reduce(&h_wide);
 
-    let mut p = scalarmult(&q, &h);
-    let q2 = scalarbase(&s);
-    point_add(&mut p, &q2);
-    let check = point_pack(&p);
-
-    let mut r = [0u8; 32];
-    r.copy_from_slice(&sig[..32]);
+    // R' = [s]B - [h]A; accept iff it encodes to R.
+    let check = double_scalarmult_vartime(&h, &neg_a, &s).compress();
     bool::from(ct_eq_fixed(&check, &r))
 }
 
