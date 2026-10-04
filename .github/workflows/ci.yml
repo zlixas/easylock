@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: rustup target add wasm32-unknown-unknown
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: wasm-pack
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-deny
       - run: cargo deny check
@@ -87,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: rustup toolchain install nightly --profile minimal
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-fuzz
       - name: run fuzz targets
@@ -104,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: rustup component add llvm-tools-preview
-      - uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
         with:
           tool: cargo-llvm-cov
       - name: measure
