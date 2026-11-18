@@ -51,6 +51,32 @@ jobs:
       - name: report hardware crypto paths exercised
         run: cargo test -p easylock-core --release hardware_matches_portable -- --nocapture
 
+  msrv:
+    # Builds and tests with the oldest supported Rust (`rust-version` in Cargo.toml),
+    # so that promise is checked rather than assumed.
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the MSRV toolchain
+        run: |
+          msrv=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)
+          test -n "$msrv"
+          echo "MSRV=$msrv" >> "$GITHUB_ENV"
+          rustup toolchain install "$msrv" --profile minimal
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-msrv-${{ env.MSRV }}-${{ hashFiles('Cargo.lock') }}
+      # The Tauri desktop crate needs WebKitGTK on Linux; it is covered by the Rust job on macOS.
+      - name: build
+        run: cargo +${{ env.MSRV }} build --workspace --exclude easylock-gui --all-targets --locked
+      - name: test
+        run: cargo +${{ env.MSRV }} test --workspace --exclude easylock-gui --locked
+
   web:
     name: WebAssembly + website
     runs-on: ubuntu-latest
