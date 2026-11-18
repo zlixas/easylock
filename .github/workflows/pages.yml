@@ -27,7 +27,7 @@ jobs:
 
       - name: Install Rust + wasm target
         run: |
-          rustup toolchain install stable --profile minimal
+          rustup toolchain install --profile minimal # version from rust-toolchain.toml
           rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-pack (checksum-verified prebuilt)

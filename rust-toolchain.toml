@@ -1,5 +1,7 @@
 [toolchain]
-channel = "stable"
+# Pinned so CI and local builds use the same compiler (and the same clippy
+# lints). Move to a newer Rust in its own, deliberate commit.
+channel = "1.100.0"
 components = ["clippy", "rustfmt"]
 targets = [
     "aarch64-apple-darwin",
