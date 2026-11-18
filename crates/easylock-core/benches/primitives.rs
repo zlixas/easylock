@@ -3,12 +3,13 @@
 //! Run with `cargo bench -p easylock-core`. Throughput is reported per byte
 //! for the bulk primitives.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use easylock_core::aead::{Aead, Aes256Gcm, ChaCha20Poly1305};
 use easylock_core::cipher::aes::Aes256;
 use easylock_core::ec::{x25519, x25519_base, SigningKey};
 use easylock_core::hash::Hash;
 use easylock_core::hash::{Blake3, Keccak256, Sha256, Sha3_256, Sha512};
+use std::hint::black_box;
 
 const SIZES: [usize; 3] = [64, 1024, 262_144];
 
