@@ -15,7 +15,7 @@
 <h3>
   <a href="https://zlixas.github.io/easylock/">🌐 Open the web app</a>
   &nbsp;·&nbsp;
-  <a href="#-install">⬇️ Install</a>
+  <a href="#install">⬇️ Install</a>
   &nbsp;·&nbsp;
   <a href="docs/FILE_FORMAT.md">📄 File format</a>
   &nbsp;·&nbsp;
