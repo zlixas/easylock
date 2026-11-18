@@ -657,9 +657,7 @@ fn default_plain_name(input: &Path) -> PathBuf {
 pub fn run_inspect(args: &InspectArgs, lang: Lang) -> Result<(), CliError> {
     for input in &args.inputs {
         let info = stream::inspect(open_input(input)?).map_err(|e| stream_err(input, &e))?;
-        let size = fs::metadata(input)
-            .map(|m| human_bytes(m.len()))
-            .unwrap_or_default();
+        let size = fs::metadata(input).map_or_else(|_| String::new(), |m| human_bytes(m.len()));
         let row = |k: [&str; 3], v: String| println!("  {:<12}{v}", lang.pick(k));
         println!("{}", input.display());
         row(

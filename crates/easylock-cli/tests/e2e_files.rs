@@ -56,7 +56,7 @@ fn every_command_prints_help_in_every_language() {
                 "{lang} {cmd:?} --help failed: {}",
                 String::from_utf8_lossy(&out.stderr)
             );
-            assert!(!out.stdout.is_empty());
+            assert_ne!(out.stdout.len(), 0, "{lang} {cmd:?} --help printed nothing");
         }
     }
 }
