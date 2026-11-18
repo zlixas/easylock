@@ -418,8 +418,9 @@ The file cannot be recovered. That is the point. For important files, add your p
 - [x] Streaming, multi-core `.elk` v2 with password and hybrid post-quantum recipients
 - [x] Encrypted vaults · signed, attested releases for Linux, macOS and Windows · Homebrew
 - [x] Offline PWA with strict CSP and Web Worker crypto
+- [x] Faster Curve25519 (radix-2^51 field, precomputed base table: ~40x faster X25519 and Ed25519)
 - [ ] Vault browser in the terminal UI and the desktop app
-- [ ] BLAKE3 SIMD, faster field arithmetic for Curve25519
+- [ ] BLAKE3 SIMD
 - [ ] Code-signed desktop builds
 - [ ] An independent security review
 
