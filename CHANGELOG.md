@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-18
+
+### Performance
+- **Curve25519, about 40x faster.** Radix-2^51 field arithmetic, an addition-chain inversion, ref10 point formats, a
+  constant-time fixed-base multiply over a precomputed table (verified against a fresh computation by a test) and a
+  sliding-window double-scalar multiply for verification. On an Apple M4: X25519 key generation 227 → 5.7 µs, key exchange
+  227 → 15.6 µs, Ed25519 sign 388 → 8 µs, verify 894 → 21 µs. In the browser: sign 0.94 → 0.07 ms, verify 1.08 → 0.12 ms.
+- **AES-256-GCM without AES hardware, including the website: about 116x faster.** Software AES is now bitsliced (four
+  blocks per pass, Boyar–Peralta S-box circuit) and software GHASH uses constant-time 64-bit carry-less multiplication.
+  Both remain constant-time. Encrypting 8 MiB in the browser went from 6.3 s to 54 ms.
+- **SHA-512 about 3x faster** on ARMv8.2 CPUs (Apple M-series and others) using the SHA-512 instructions: 0.6 → 1.8 GiB/s.
+- `easylock hash` and file hashing in the desktop app stream their input: hashing a 1 GiB file needs about 4 MB of memory
+  instead of 1 GB.
+- Terminal UI: pasting large text is instant (bracketed paste, one redraw per burst of keys instead of one per key).
+- Desktop app: file encryption, decryption, hashing and Argon2 run off the main thread, so the window stays responsive,
+  and progress updates are limited to about 200 per file instead of one per 8 KiB.
+- Website: the WebAssembly engine is preloaded so it downloads in parallel with the page script.
+
 ### Added
 - Website: installable **PWA** that works fully **offline** (service worker), a strict **Content-Security-Policy**
   (no inline scripts, no third-party requests), and a **Web Worker** that runs Argon2, file encryption and RSA
